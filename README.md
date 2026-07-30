@@ -74,6 +74,11 @@ Com mock off, a fila do app usa **poll do backend** (não a fila mock SSE).
 
 **Publicação oficial = GitHub Actions** (`windows-latest` + NSIS). Tag `v*` no commit da branch → o workflow escolhe o canal e anexa o `.exe` na Release.
 
+| Release | Artefato | Front (`REACT_APP_PRINT_AGENT_WINDOWS_DOWNLOAD_URL`) |
+|---------|----------|------------------------------------------------------|
+| [v0.1.0](https://github.com/QuantumAlphaIntelligence/delidesk/releases/tag/v0.1.0) (prerelease) | `DeliDesk-Setup-sandbox-0.1.0.exe` | Front sandbox / `.env` local |
+| [v0.1.1](https://github.com/QuantumAlphaIntelligence/delidesk/releases/tag/v0.1.1) | `DeliDesk-Setup-prod-0.1.0.exe` | Front prod (build arg Docker) |
+
 No PC do lojista **não há** `.env`: as URLs vão em `channel.json` dentro do instalador. Dev local continua com `.env.local`.
 
 ```bash
