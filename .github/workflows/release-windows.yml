@@ -50,8 +50,17 @@ jobs:
             elif echo "$CONTAINS" | grep -qE 'origin/develop([[:space:]]|$)'; then
               CHANNEL=sandbox
             else
-              echo "::error::Não foi possível determinar o canal (commit não está em main nem develop)."
-              exit 1
+              # Tag push às vezes só tem refs/tags; fallback pela ref tip
+              if git rev-parse --verify origin/develop >/dev/null 2>&1 && \
+                 [ "$(git rev-parse "$SHA")" = "$(git rev-parse origin/develop)" ]; then
+                CHANNEL=sandbox
+              elif git rev-parse --verify origin/main >/dev/null 2>&1 && \
+                   [ "$(git rev-parse "$SHA")" = "$(git rev-parse origin/main)" ]; then
+                CHANNEL=prod
+              else
+                echo "::error::Não foi possível determinar o canal (commit não está em main nem develop)."
+                exit 1
+              fi
             fi
           fi
           VERSION="${GITHUB_REF_NAME#v}"

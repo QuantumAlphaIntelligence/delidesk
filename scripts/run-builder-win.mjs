@@ -14,7 +14,7 @@ process.env.CHANNEL = channel
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const result = spawnSync(
   'npx',
-  ['electron-builder', '--win', '--x64', 'nsis'],
+  ['electron-builder', '--win', 'nsis', '--x64'],
   { stdio: 'inherit', env: process.env, cwd: root, shell: true }
 )
 process.exit(result.status ?? 1)
