@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans font-normal tracking-tight;
+    background: linear-gradient(135deg, #1e6c85 0%, #0d3c4f 100%);
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/10 border border-white/20 rounded-2xl backdrop-blur-xl;
+  }
+
+  .btn-primary {
+    @apply bg-delivai-neon-green text-delivai-blue-dark font-semibold px-5 py-3 rounded-lg
+      hover:bg-opacity-90 transition-all duration-200
+      shadow-[0_0_28px_-4px_rgba(71,242,199,0.45)];
+  }
+
+  .btn-secondary {
+    @apply bg-white/20 text-delivai-text-white font-semibold px-4 py-2 rounded-lg
+      border border-white/20 hover:bg-white/30 transition-all duration-200;
+  }
+
+  .pill-online {
+    @apply inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full
+      bg-delivai-neon-green/20 text-delivai-neon-green border border-delivai-neon-green/40;
+  }
+
+  .pill-offline {
+    @apply inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full
+      bg-red-500/20 text-red-300 border border-red-500/40;
+  }
+}

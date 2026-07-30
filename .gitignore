@@ -1,0 +1,18 @@
+node_modules
+dist
+out
+release
+.DS_Store
+*.log
+.env
+.env.local
+.idea
+.vscode
+*.exe
+*.blockmap
+*.AppImage
+*.deb
+*.rpm
+# Gerado por bake-channel (não versionar)
+resources/channel.json
+tsconfig.*.tsbuildinfo

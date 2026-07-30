@@ -1,0 +1,33 @@
+appId: br.com.delivai.delidesk
+productName: DeliDesk
+copyright: Copyright © DelivAI
+directories:
+  output: release
+  buildResources: resources
+files:
+  - out/**/*
+asar: true
+extraMetadata:
+  main: out/main/index.js
+# Canal gerado por scripts/bake-channel.mjs (não versionar channel.json)
+extraResources:
+  - from: resources/channel.json
+    to: channel.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # CHANNEL=sandbox|prod (exportado pelo script / CI)
+  artifactName: DeliDesk-Setup-${env.CHANNEL}-${version}.${ext}
+  # Assinatura de código = fora de escopo V1
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DeliDesk
+linux:
+  target:
+    - dir
+  category: Office

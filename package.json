@@ -1,0 +1,40 @@
+{
+  "name": "delidesk",
+  "version": "0.1.0",
+  "description": "DeliDesk — app da loja DelivAI (impressão, painel, PDVAI)",
+  "main": "./out/main/index.js",
+  "author": "DelivAI",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "bake:sandbox": "node scripts/bake-channel.mjs sandbox",
+    "bake:prod": "node scripts/bake-channel.mjs prod",
+    "dist": "npm run build && electron-builder --dir",
+    "dist:win": "npm run build && electron-builder --win --x64 --dir",
+    "dist:win:installer": "npm run build && electron-builder --win --x64 nsis",
+    "dist:win:sandbox": "npm run bake:sandbox && npm run build && node scripts/run-builder-win.mjs sandbox",
+    "dist:win:prod": "npm run bake:prod && npm run build && node scripts/run-builder-win.mjs prod",
+    "dist:linux": "npm run build && electron-builder --linux --dir"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.2",
+    "@types/react-dom": "^19.1.2",
+    "@vitejs/plugin-react": "^4.4.1",
+    "autoprefixer": "^10.4.21",
+    "electron": "^35.2.1",
+    "electron-builder": "^26.0.12",
+    "electron-vite": "^3.1.0",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.3"
+  }
+}

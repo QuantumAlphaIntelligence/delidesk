@@ -1,0 +1,99 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Canal do instalador
+        required: true
+        type: choice
+        options:
+          - sandbox
+          - prod
+      ref:
+        description: Branch ou SHA (vazio = ref do evento)
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref != '' && inputs.ref || github.sha }}
+
+      - name: Resolve channel
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CHANNEL="${{ inputs.channel }}"
+          else
+            git fetch origin main develop 2>/dev/null || git fetch origin main 2>/dev/null || true
+            SHA="${{ github.sha }}"
+            CONTAINS=$(git branch -r --contains "$SHA" 2>/dev/null || true)
+            echo "Branches containing $SHA:"
+            echo "$CONTAINS"
+            # main → prod; só develop → sandbox
+            if echo "$CONTAINS" | grep -qE 'origin/main([[:space:]]|$)'; then
+              CHANNEL=prod
+            elif echo "$CONTAINS" | grep -qE 'origin/develop([[:space:]]|$)'; then
+              CHANNEL=sandbox
+            else
+              echo "::error::Não foi possível determinar o canal (commit não está em main nem develop)."
+              exit 1
+            fi
+          fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION=$(node -p "require('./package.json').version")
+          fi
+          echo "channel=$CHANNEL" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Resolved channel=$CHANNEL version=$VERSION"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Bake channel + build NSIS
+        env:
+          CHANNEL: ${{ steps.meta.outputs.channel }}
+        shell: bash
+        run: |
+          if [ "$CHANNEL" = "prod" ]; then
+            npm run dist:win:prod
+          else
+            npm run dist:win:sandbox
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeliDesk-Setup-${{ steps.meta.outputs.channel }}-${{ steps.meta.outputs.version }}
+          path: release/DeliDesk-Setup-*.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/DeliDesk-Setup-*.exe
+          generate_release_notes: true
+          prerelease: ${{ steps.meta.outputs.channel == 'sandbox' }}
+          fail_on_unmatched_files: true
