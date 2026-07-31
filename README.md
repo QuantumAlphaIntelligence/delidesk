@@ -6,6 +6,10 @@ Stack: Electron + React + TypeScript + Tailwind. Visual alinhado ao front DelivA
 
 > Referência de telas: `backend-delivai/docs/plans/delidesk-apresentacao.html`
 
+## Git / branches
+
+**Nunca** commit ou push direto em `main` ou `develop`. Trabalho só em `feature/…` ou `fix/…` + PR. Inventário alvo: `main` + `develop` + **1** branch de melhoria. Detalhes: [`docs/operations/branches.md`](docs/operations/branches.md) (mesmo padrão do DelivAI).
+
 ## Requisitos
 
 - **Windows** para tray/impressão reais (desenvolvimento de UI também funciona no Linux/WSL com limitações de tray/GUI)

@@ -1,0 +1,46 @@
+---
+description: Merge sob pedido + CI verde; inventário = troncos + 1 branch de melhoria (DeliDesk)
+alwaysApply: true
+---
+
+# Merge de PR — sob pedido + CI verde (DeliDesk)
+
+Doc canônica: `docs/operations/branches.md`. Mesmo padrão do DelivAI (`backend-delivai/docs/operations/branches.md`).
+
+## Nunca trabalhar nos troncos
+
+- **Nunca** commit, push ou alterar código **direto** em `develop` nem `main`.
+- Trabalho só em `feature/…` ou `fix/…` + PR.
+- Checkout local em tronco após merge do `gh` **não** autoriza commit no tronco.
+
+## Canais (teste vs prod)
+
+- **Sandbox / teste:** PR/merge em **`develop`** → instalador `DeliDesk-Setup-sandbox-*.exe` (Actions) ou `npm run dev` / `dist:win:sandbox` na **feature**.
+- **Prod:** PR/merge em **`main`** → instalador `DeliDesk-Setup-prod-*.exe` — **somente** fim da fase + pedido explícito do Leo.
+- “Sobe pro test/sandbox” / “merge” na fase de testes → **`develop`**, nunca commit direto no tronco.
+
+## Quando o Leo pedir merge (ou “automerge” / “merge direto”)
+
+1. Abrir/atualizar a PR no tronco certo (`develop` para sandbox; `main` só para prod).
+2. **Esperar checks** até verdes (`gh pr checks` quando disponível).
+3. **Não** mergear só porque `mergeStateStatus` é `CLEAN` sem olhar workflows.
+4. Check **falhou** → corrigir ou reportar; não mergear.
+5. Check **pendente** → aguardar; se demorar demais, avisar Leo — sem merge no escuro.
+6. Só então: squash merge **sem** `--delete-branch` por padrão.
+7. Reportar URL + estado. Se Leo pediu inventário limpo / “deixa só a atual”, apagar branches **antigas mergeadas** da frente; manter a melhoria atual.
+
+## Inventário de branches (padrão)
+
+Doc: `docs/operations/branches.md` § Inventário alvo.
+
+- **DeliDesk remoto:** só `main` + `develop` + **1** branch de melhoria (`feature/…` ou `fix/…`).
+- **Uma frente = uma branch.** Reutilizar até mergear. Se a PR já mergeou e for preciso branch nova: criar a atual, e **apagar as antigas da frente** (quando Leo autorizar limpeza / “deixa só a atual”).
+- **Nunca apagar (absoluto):** `main`, `develop`, `backup/*`, branch de melhoria **atual**, PR aberta.
+
+## Proibido
+
+- Mergear por iniciativa própria (sem pedido explícito do Leo).
+- Push/commit direto em `develop` ou `main`.
+- Mergear com CI vermelho ou pendente sem Leo autorizar explicitamente o merge assim mesmo.
+- Apagar `main` / `develop` / backup / a branch atual / branch com PR aberta.
+- Acumular várias feature/fix mergeadas no remoto “por precaução”.
