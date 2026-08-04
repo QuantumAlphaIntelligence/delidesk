@@ -3,6 +3,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from '
 import { join } from 'path'
 import type { AuthSession } from '../shared/ipc'
 import { getBackendBaseUrl, REDIRECT_URI } from '../shared/config'
+import {
+  sanitizeCompanyName,
+  sanitizeLogoUrl
+} from '../shared/branding'
 
 const FILE = 'session.bin'
 
@@ -26,13 +30,43 @@ function decrypt(buf: Buffer): string {
   return buf.toString('utf8')
 }
 
+/** Remove UUID legado e URLs remotas de logo (só data URL é estável no shell). */
+function sanitizeSession(session: AuthSession): AuthSession {
+  const companyName = sanitizeCompanyName(session.companyName)
+  let companyLogoUrl = sanitizeLogoUrl(session.companyLogoUrl)
+  // URL https no renderer do Electron costuma quebrar (ícone partido) —
+  // limpa até o main baixar de novo como data URL.
+  if (companyLogoUrl && !companyLogoUrl.startsWith('data:image/')) {
+    companyLogoUrl = undefined
+  }
+  const companyCnpj = session.companyCnpj?.replace(/\D/g, '') || undefined
+  const next: AuthSession = {
+    ...session,
+    companyName,
+    companyLogoUrl,
+    companyCnpj: companyCnpj && companyCnpj.length === 14 ? companyCnpj : undefined
+  }
+  const dirty =
+    next.companyName !== session.companyName ||
+    next.companyLogoUrl !== session.companyLogoUrl ||
+    next.companyCnpj !== session.companyCnpj
+  if (dirty) {
+    try {
+      setSession(next)
+    } catch {
+      /* ignore */
+    }
+  }
+  return next
+}
+
 export function getSession(): AuthSession | null {
   const path = sessionPath()
   if (!existsSync(path)) return null
   try {
     const raw = readFileSync(path)
     const json = decrypt(raw)
-    return JSON.parse(json) as AuthSession
+    return sanitizeSession(JSON.parse(json) as AuthSession)
   } catch {
     return null
   }
@@ -53,7 +87,7 @@ export function saveMockSession(companyName: string): AuthSession {
   const session: AuthSession = {
     accessToken: `mock_access_${Date.now()}`,
     refreshToken: `mock_refresh_${Date.now()}`,
-    companyName,
+    companyName: sanitizeCompanyName(companyName) || companyName,
     expiresAt: Date.now() + 8 * 60 * 60 * 1000
   }
   setSession(session)
@@ -67,6 +101,8 @@ type TokenResponse = {
   refresh_token?: string
   expires_in?: number
   company_id?: string
+  company_name?: string
+  company_logo_url?: string | null
   agent_id?: string
   panel_sso_code?: string
   message?: string
@@ -84,14 +120,53 @@ export type TokenExchangeResult = {
 
 function sessionFromTokenResponse(data: TokenResponse): AuthSession {
   const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : 2_592_000
+  // Nunca usar company_id (UUID) como rótulo — só company_name real.
+  const name = sanitizeCompanyName(data.company_name)
+  const logo = sanitizeLogoUrl(data.company_logo_url)
   return {
     accessToken: data.access_token!,
     refreshToken: data.refresh_token,
-    companyName: data.company_id,
+    companyName: name,
+    companyLogoUrl: logo,
     expiresAt: Date.now() + expiresIn * 1000,
     agentId: data.agent_id,
     companyId: data.company_id
   }
+}
+
+/** Atualiza nome/logo/CNPJ da loja sem trocar tokens (ex.: painel ou /printers). */
+export function patchSessionBranding(partial: {
+  companyName?: string
+  companyLogoUrl?: string | null
+  companyCnpj?: string
+  companyId?: string
+}): AuthSession | null {
+  const current = getSession()
+  if (!current) return null
+  const name = sanitizeCompanyName(partial.companyName)
+  const logo =
+    partial.companyLogoUrl === null
+      ? undefined
+      : sanitizeLogoUrl(partial.companyLogoUrl)
+  const cnpjDigits = partial.companyCnpj?.replace(/\D/g, '')
+  const next: AuthSession = {
+    ...current,
+    companyName: name || current.companyName,
+    companyLogoUrl: logo !== undefined ? logo : current.companyLogoUrl,
+    companyCnpj:
+      cnpjDigits && cnpjDigits.length === 14 ? cnpjDigits : current.companyCnpj,
+    companyId: partial.companyId?.trim() || current.companyId
+  }
+  if (
+    next.companyName === current.companyName &&
+    next.companyLogoUrl === current.companyLogoUrl &&
+    next.companyCnpj === current.companyCnpj &&
+    next.companyId === current.companyId
+  ) {
+    return current
+  }
+  setSession(next)
+  return next
 }
 
 /**
@@ -173,10 +248,13 @@ export async function refreshSession(): Promise<AuthSession> {
   if (!res.ok || !data.access_token) {
     throw new Error(data.message || `Falha no refresh (${res.status})`)
   }
+  const fresh = sessionFromTokenResponse(data)
   const session: AuthSession = {
-    ...sessionFromTokenResponse(data),
-    companyName: current.companyName ?? data.company_id,
-    companyId: current.companyId ?? data.company_id,
+    ...fresh,
+    companyName: fresh.companyName || current.companyName,
+    companyLogoUrl: fresh.companyLogoUrl || current.companyLogoUrl,
+    companyCnpj: fresh.companyCnpj || current.companyCnpj,
+    companyId: fresh.companyId || current.companyId,
     agentId: data.agent_id ?? current.agentId
   }
   setSession(session)

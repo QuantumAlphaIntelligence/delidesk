@@ -3,8 +3,10 @@ import { IPC } from '../shared/ipc'
 import {
   clearSession,
   getSession,
+  patchSessionBranding,
   refreshSession
 } from './auth-store'
+import { resolveLogoForShell } from './logo-cache'
 import { getMainWindow } from './window'
 
 export type AgentJob = {
@@ -78,6 +80,36 @@ export async function reportPrinters(
     throw new Error(
       typeof data.message === 'string' ? data.message : `report printers (${res.status})`
     )
+  }
+  const name = typeof data.company_name === 'string' ? data.company_name : undefined
+  const logoRaw =
+    typeof data.company_logo_url === 'string'
+      ? data.company_logo_url
+      : data.company_logo_url === null
+        ? null
+        : undefined
+  const companyId = typeof data.company_id === 'string' ? data.company_id : undefined
+  const logo =
+    logoRaw === null
+      ? null
+      : logoRaw
+        ? ((await resolveLogoForShell(logoRaw)) ?? null)
+        : undefined
+  // company_id sozinho não atualiza UI — evita reintroduzir UUID como “nome”.
+  if (name || logo !== undefined) {
+    const next = patchSessionBranding({
+      companyName: name,
+      companyLogoUrl: logo,
+      companyId
+    })
+    if (next) {
+      getMainWindow()?.webContents.send(IPC.AUTH_SESSION_CHANGED, next)
+    }
+  } else if (companyId) {
+    const next = patchSessionBranding({ companyId })
+    if (next) {
+      getMainWindow()?.webContents.send(IPC.AUTH_SESSION_CHANGED, next)
+    }
   }
 }
 

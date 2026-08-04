@@ -525,15 +525,42 @@ export function stopBackendPoll(): PrintStateSnapshot {
   return getSnapshot()
 }
 
-/** Após login real: reporta impressoras e inicia poll. */
+/**
+ * Remove cupons de fixture/mock da fila local (LOJA CENTRO / Maria / mock-sse).
+ * Esses jobs ficam em userData/print-queue.json e NÃO são da loja autenticada.
+ */
+export function clearDemoPrintJobs(): PrintStateSnapshot {
+  const before = jobs.length
+  jobs = jobs.filter((j) => {
+    if (j.source === 'test' || j.source === 'mock-sse') return false
+    const preview = (j.previewText ?? '').toUpperCase()
+    if (preview.includes('FIXTURE DE TESTE')) return false
+    if (preview.includes('LOJA CENTRO') && preview.includes('MARIA')) return false
+    return true
+  })
+  if (jobs.length !== before) {
+    console.info('[print] cleared demo/fixture jobs', { removed: before - jobs.length })
+    persist()
+    emit()
+  }
+  return getSnapshot()
+}
+
+/** Após login real: limpa fixtures locais, reporta impressoras e inicia poll. */
 export async function onRealSessionReady(): Promise<void> {
   stopMockSse()
+  clearDemoPrintJobs()
   await refreshPrinters()
   startBackendPoll()
 }
 
 export async function initPrintService(): Promise<void> {
   load()
+  // Se já há sessão real (cold start), não reexibir fila de mock de runs anteriores
+  const session = getSession()
+  if (session && !isMockSession(session) && !authMock()) {
+    clearDemoPrintJobs()
+  }
   await refreshPrinters()
   // process leftover queued jobs from previous run
   void processQueued()

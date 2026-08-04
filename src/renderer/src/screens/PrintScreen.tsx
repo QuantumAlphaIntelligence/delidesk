@@ -228,7 +228,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className="glass-card rounded-xl p-4">
           <h2 className="text-xs font-semibold text-delivai-text-gray/70 mb-3">
-            Fila de jobs
+            Fila neste PC
             {state.backendPollRunning
               ? ' (poll ativo)'
               : state.mockSseRunning

@@ -3,7 +3,11 @@ export const PROTOCOL = 'delidesk'
 export type AuthSession = {
   accessToken: string
   refreshToken?: string
+  /** Nome fantasia / razão — nunca UUID. */
   companyName?: string
+  companyLogoUrl?: string
+  /** CNPJ só dígitos (UI mascara). */
+  companyCnpj?: string
   companyId?: string
   agentId?: string
   expiresAt?: number

@@ -54,6 +54,7 @@ import {
   showPanel
 } from './panel-view'
 import {
+  clearDemoPdvai,
   createLocalOrder,
   getPdvaiState,
   initPdvai,
@@ -187,6 +188,7 @@ async function runAuthPollTick(generation: number): Promise<void> {
       }
     }
     await onRealSessionReady()
+    clearDemoPdvai()
   } catch (err) {
     if (generation !== authPollGeneration || !pendingAuth) return
     const msg = err instanceof Error ? err.message : String(err)
@@ -279,6 +281,7 @@ function registerIpc(): void {
     stopBackendPoll()
     stopMockSse()
     clearSession()
+    clearDemoPdvai()
     getMainWindow()?.webContents.send(IPC.AUTH_SESSION_CHANGED, null)
     return { ok: true }
   })
@@ -453,6 +456,7 @@ async function handleAuthCallback(url: string): Promise<void> {
         }
       }
       await onRealSessionReady()
+      clearDemoPdvai()
     } catch (err) {
       console.error('[auth] token exchange failed', err)
       if (restoreSessionToUi(win)) {
@@ -511,7 +515,11 @@ if (!gotLock) {
           startMockSse()
         }
       } else if (session && !isMockSession(session)) {
-        void onRealSessionReady()
+        void onRealSessionReady().then(() => {
+          clearDemoPdvai()
+          // Rehidrata nome/logo do painel (sessões antigas com UUID como “nome”).
+          void import('./panel-view').then((m) => m.hydrateBrandingAfterSeed())
+        })
       }
     })
 
