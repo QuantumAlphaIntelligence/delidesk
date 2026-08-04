@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { app } from 'electron'
 
 /** Carrega pares KEY=VALUE de um arquivo .env no process.env. */
 function loadEnvFile(filePath: string): void {
@@ -57,8 +58,19 @@ function loadChannelJson(): void {
   }
 }
 
-// Ordem: canal do build → .env → .env.local (dev sobrescreve)
+// Ordem: canal do build → (só em dev) .env → .env.local
 loadChannelJson()
-const root = process.cwd()
-loadEnvFile(join(root, '.env'))
-loadEnvFile(join(root, '.env.local'))
+
+// Instalador empacotado: NUNCA ler .env do disco (evita localhost do PC do Leo/dev).
+let packaged = false
+try {
+  packaged = app.isPackaged === true
+} catch {
+  packaged = false
+}
+
+if (!packaged) {
+  const root = process.cwd()
+  loadEnvFile(join(root, '.env'))
+  loadEnvFile(join(root, '.env.local'))
+}

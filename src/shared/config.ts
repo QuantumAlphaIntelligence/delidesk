@@ -18,14 +18,14 @@ export function getBackendBaseUrl(): string {
   return (
     process.env.DELIDESK_API_URL ||
     process.env.DELIDESK_BACKEND_URL ||
-    'https://api.delivai.com.br'
+    'https://delivai-prod-delivai-backend.rwysej.easypanel.host'
   ).replace(/\/$/, '')
 }
 
 /** URL da tela Autorizar no front DelivAI. Override com DELIDESK_AUTH_URL. */
 export function getAuthAuthorizeUrl(state: string, machineLabel?: string): string {
   const base =
-    process.env.DELIDESK_AUTH_URL || 'https://app.delivai.com.br/autorizar'
+    process.env.DELIDESK_AUTH_URL || 'https://delivai.com.br/autorizar'
 
   const url = new URL(base)
   url.searchParams.set('client_id', 'delidesk')
@@ -42,11 +42,11 @@ export function getPanelOrigin(): string {
   const raw =
     process.env.DELIDESK_PANEL_URL ||
     process.env.DELIDESK_AUTH_URL ||
-    'https://app.delivai.com.br/dashboard/orders'
+    'https://delivai.com.br/dashboard/orders'
   try {
     return new URL(raw).origin
   } catch {
-    return 'https://app.delivai.com.br'
+    return 'https://delivai.com.br'
   }
 }
 
