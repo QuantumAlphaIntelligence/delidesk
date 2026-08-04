@@ -67,8 +67,10 @@ Qualquer outra branch é **temporária** (feature/fix/chore).
 
 | Objetivo | O que fazer | O que **não** fazer |
 |----------|-------------|---------------------|
-| **Testar** (PC com impressora / sandbox) | PR → merge em **`develop`** → Actions gera `DeliDesk-Setup-sandbox-*.exe` (ou `npm run dev` / `dist:win:sandbox` na **feature**) | Commit/push direto em `develop` |
-| **Produção** | PR → merge em **`main`** → Actions gera `DeliDesk-Setup-prod-*.exe` — **somente** ao fim da fase e com pedido **explícito** | Antecipar prod no meio dos testes; commit direto em `main` |
+| **Testar** (PC com impressora / sandbox) | PR → merge em **`develop`** → disparar **Release Windows** canal `sandbox` (tag/`workflow_dispatch`) → `DeliDesk-Setup-sandbox-*.exe` (ou `npm run dev` / `dist:win:sandbox` na feature) | Commit/push direto em `develop`; achar que merge sozinho publica o `.exe` |
+| **Produção** | PR → merge em **`main`** → bump versão → **Release Windows** canal `prod` — **somente** ao fim da fase e com pedido **explícito** | Antecipar prod no meio dos testes; commit direto em `main`; publicar no pico do almoço sem necessidade |
+
+> **Canais, versão do cliente, auto-update sem quebrar turno:** [`releases-and-updates.md`](releases-and-updates.md) (canônica).
 
 ### Como interpretar pedidos
 
@@ -86,6 +88,19 @@ Qualquer outra branch é **temporária** (feature/fix/chore).
 |---------|--------------------------------------------------------|
 | **Cada commit/push na feature** | Branch **apta a merge na `develop`** — fetch + merge/rebase local, conflitos resolvidos, typecheck/build verde |
 | **Fim da fase** | **Somente quando Leo pedir:** alinhar para merge em `main` (prod). Não antecipar |
+
+### Fecho de frente (padrão — sob pedido explícito de prod)
+
+Quando Leo pedir subir prod / fechar frente / inventário limpo:
+
+1. Commitar código + docs na feature (sem `_tmp_*` / `.env`).
+2. **Priorizar `main`:** PR → CI → squash merge.
+3. **Espelhar `develop`:** mesmo código nos dois troncos (não deixar `main` à frente sem sync).
+4. **Release Windows `prod`** (Actions) — merge sozinho **não** atualiza o download do cliente. Ver [`releases-and-updates.md`](releases-and-updates.md).
+5. **Apagar** feature/fix mergeadas da frente; **nunca** `main` / `develop` / `backup/*` / PR aberta.
+6. Inventário alvo: `main` + `develop` (+ 0 ou 1 melhoria nova).
+
+Canônica cruzada: `backend-delivai/docs/operations/branches.md` § Fecho de frente.
 
 ---
 
@@ -106,7 +121,7 @@ Qualquer outra branch é **temporária** (feature/fix/chore).
 
 | Repo | Branch de melhoria | Tronco sandbox | Tronco prod |
 |------|--------------------|----------------|-------------|
-| `delidesk` | `fix/delidesk-print-queue` | `develop` → instalador sandbox | `main` → instalador prod |
+| `delidesk` | *(fecho — limpar feature após sync)* | `develop` → instalador sandbox | `main` → instalador prod |
 
-> Detalhe de canais e artefatos: [`README.md`](../../README.md) § Canais.
-|
+> Detalhe de canais, releases e update seguro: [`releases-and-updates.md`](releases-and-updates.md).
+
