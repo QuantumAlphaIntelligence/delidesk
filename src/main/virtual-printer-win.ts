@@ -58,6 +58,29 @@ export async function isVirtualPrinterInstalled(): Promise<boolean> {
   }
 }
 
+/** Driver atual da fila; vazio se não existir. */
+export async function getVirtualPrinterDriverName(): Promise<string | null> {
+  if (!isWin()) return null
+  try {
+    const { stdout } = await runPs(
+      `$p = Get-Printer -Name '${VIRTUAL_PRINTER_NAME}' -ErrorAction SilentlyContinue; if ($p) { $p.DriverName } else { '' }`
+    )
+    const name = stdout.trim()
+    return name.length > 0 ? name : null
+  } catch {
+    return null
+  }
+}
+
+const PREFERRED_VIRTUAL_DRIVER = 'Generic / Text Only'
+
+/** true se a fila existe com driver adequado para captura RAW (não IPP). */
+export async function isVirtualPrinterReady(): Promise<boolean> {
+  const driver = await getVirtualPrinterDriverName()
+  if (!driver) return false
+  return driver.toLowerCase() === PREFERRED_VIRTUAL_DRIVER.toLowerCase()
+}
+
 function resourceScript(name: 'install-virtual-printer' | 'uninstall-virtual-printer'): string | null {
   const file = `${name}.ps1`
   const candidates = [
@@ -78,11 +101,22 @@ $portName = '${VIRTUAL_PORT_NAME}'
 $printerName = '${VIRTUAL_PRINTER_NAME}'
 $hostAddr = '127.0.0.1'
 $port = ${VIRTUAL_LISTEN_PORT}
+$preferredDriver = 'Generic / Text Only'
+try {
+  if (-not (Get-PrinterDriver -Name $preferredDriver -ErrorAction SilentlyContinue)) {
+    Add-PrinterDriver -Name $preferredDriver
+  }
+} catch { try { Add-PrinterDriver -Name $preferredDriver } catch {} }
 if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
   Add-PrinterPort -Name $portName -PrinterHostAddress $hostAddr -PortNumber $port
 }
-if (-not (Get-Printer -Name $printerName -ErrorAction SilentlyContinue)) {
-  $drivers = @('Generic / Text Only','Microsoft IPP Class Driver','MS Publisher Color Printer')
+$existing = Get-Printer -Name $printerName -ErrorAction SilentlyContinue
+if ($existing -and $existing.DriverName -ne $preferredDriver) {
+  Remove-Printer -Name $printerName
+  $existing = $null
+}
+if (-not $existing) {
+  $drivers = @($preferredDriver,'MS Publisher Color Printer','Microsoft IPP Class Driver')
   $ok = $false
   foreach ($d in $drivers) {
     try {
@@ -96,18 +130,20 @@ if (-not (Get-Printer -Name $printerName -ErrorAction SilentlyContinue)) {
 `
 }
 
-/** Tenta criar a fila sem UAC; se falhar, o UI oferece elevação. */
+/** Tenta criar/corrigir a fila sem UAC; se falhar, o UI oferece elevação. */
 export async function ensureVirtualPrinter(): Promise<{
   ok: boolean
   needsElevation?: boolean
   error?: string
 }> {
   if (!isWin()) return { ok: false, error: 'Somente Windows' }
-  if (await isVirtualPrinterInstalled()) {
+  if (await isVirtualPrinterReady()) {
     status.installed = true
     status.lastError = undefined
     return { ok: true }
   }
+  // Existe com driver IPP/errado → recria com Generic / Text Only.
+  const wrongDriver = await isVirtualPrinterInstalled()
   try {
     const file = resourceScript('install-virtual-printer')
     if (file) {
@@ -120,14 +156,25 @@ export async function ensureVirtualPrinter(): Promise<{
       await runPs(installScriptInline())
     }
     status.installed = await isVirtualPrinterInstalled()
-    if (status.installed) {
+    if (await isVirtualPrinterReady()) {
       status.lastError = undefined
       return { ok: true }
+    }
+    if (status.installed) {
+      const driver = await getVirtualPrinterDriverName()
+      status.lastError = `Driver '${driver ?? '?'}' não captura iFood — precisa Generic / Text Only`
+      return {
+        ok: false,
+        needsElevation: true,
+        error: status.lastError
+      }
     }
     return {
       ok: false,
       needsElevation: true,
-      error: 'Sem permissão para criar a impressora DeliDesk'
+      error: wrongDriver
+        ? 'Sem permissão para corrigir a impressora DeliDesk'
+        : 'Sem permissão para criar a impressora DeliDesk'
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -162,11 +209,12 @@ export function startVirtualPrinterListener(): void {
   if (!isWin() || server) return
   server = createServer((socket: Socket) => {
     const chunks: Buffer[] = []
-    socket.on('data', (chunk) => {
-      chunks.push(Buffer.from(chunk))
-    })
-    socket.on('end', () => {
+    let settled = false
+    const finish = (reason: string) => {
+      if (settled) return
+      settled = true
       const bytes = Buffer.concat(chunks)
+      console.info('[virtual-printer] job', { reason, bytes: bytes.length })
       if (bytes.length === 0) return
       status.lastForwardAt = Date.now()
       try {
@@ -174,9 +222,29 @@ export function startVirtualPrinterListener(): void {
       } catch (err) {
         console.warn('[virtual-printer] job handler failed', err)
       }
+    }
+    // Spooler às vezes não manda FIN limpo; idle após dados também fecha o job.
+    let idleTimer: NodeJS.Timeout | null = null
+    const armIdle = () => {
+      if (idleTimer) clearTimeout(idleTimer)
+      idleTimer = setTimeout(() => {
+        try {
+          socket.end()
+        } catch {
+          /* ignore */
+        }
+        finish('idle')
+      }, 800)
+    }
+    socket.on('data', (chunk) => {
+      chunks.push(Buffer.from(chunk))
+      armIdle()
     })
+    socket.on('end', () => finish('end'))
+    socket.on('close', () => finish('close'))
     socket.on('error', (err) => {
       console.warn('[virtual-printer] socket error', err)
+      finish('error')
     })
   })
   server.on('error', (err) => {
