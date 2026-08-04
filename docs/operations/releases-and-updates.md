@@ -12,7 +12,9 @@
 | **sandbox** | `develop` | `DeliDesk-Setup-sandbox-*.exe` | **prerelease** | API **test** (`:staging`) | Leo / homologação |
 | **prod** | `main` | `DeliDesk-Setup-prod-*.exe` | release **estável** (não prerelease) | API **produção** | Cliente da loja |
 
-- O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL`).
+- O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL` + `DELIDESK_API_URL` / AUTH / PANEL).
+- Fonte das URLs: `env.production` (prod) ou `env.sandbox` (sandbox) no CI — **nunca** o `.env` local do desenvolvedor.
+- App **empacotado** ignora `.env` / `.env.local` no disco (evita localhost “vazar” no PC de teste).
 - Feed de update: `{BACKEND}/webhook/public/delidesk-update/{sandbox|prod}`.
 - Instalador **sandbox não vira prod** sozinho (e vice-versa). Cliente em prod **só** recebe releases estáveis.
 
