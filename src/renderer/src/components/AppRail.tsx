@@ -68,18 +68,6 @@ const MAIN: NavItem[] = [
     )
   },
   {
-    id: 'print',
-    label: 'Impressão',
-    icon: (
-      <IconBox>
-        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-          <rect x="7" y="14" width="10" height="6" rx="1" />
-        </svg>
-      </IconBox>
-    )
-  },
-  {
     id: 'pdvai',
     label: 'Balcão',
     hint: 'PDVAI',
@@ -88,6 +76,23 @@ const MAIN: NavItem[] = [
         <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
           <rect x="3" y="5" width="18" height="14" rx="2" />
           <path d="M7 9h4M7 12h6M7 15h3" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  }
+]
+
+/** Configuração — impressão/agente fora do menu operacional. */
+const CONFIG: NavItem[] = [
+  {
+    id: 'print',
+    label: 'Impressão',
+    hint: 'Fila e agente',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M7 8V4h10v4M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+          <rect x="7" y="14" width="10" height="6" rx="1" />
         </svg>
       </IconBox>
     )
@@ -147,7 +152,11 @@ const LOJA: NavItem[] = [
         </svg>
       </IconBox>
     )
-  },
+  }
+]
+
+const CONFIG_FOOTER: NavItem[] = [
+  ...CONFIG,
   {
     id: 'company',
     label: 'Empresa',
@@ -323,6 +332,27 @@ export function AppRail({
         ) : null}
 
         {LOJA.map((item) => (
+          <NavButton
+            key={item.id}
+            item={item}
+            active={active === item.id}
+            expanded={expanded}
+            onClick={() => onNavigate(item.id)}
+          />
+        ))}
+
+        {expanded ? (
+          <div className="px-2 pb-1 pt-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
+              Configuração
+            </p>
+            <div className="mt-1.5 h-px bg-white/10" />
+          </div>
+        ) : (
+          <div className="mx-2 my-1 h-px bg-white/10" />
+        )}
+
+        {CONFIG_FOOTER.map((item) => (
           <NavButton
             key={item.id}
             item={item}

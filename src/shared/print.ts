@@ -35,6 +35,15 @@ export type PrintStateSnapshot = {
   backendPollRunning: boolean
   /** true quando DELIDESK_AUTH_MOCK está ativo (fila mock). */
   authMock: boolean
+  /**
+   * Feature Printer da plataforma (Dev). null = ainda não sincronizado.
+   * false = lista impressoras, mas não usa fila de cupom DelivAI.
+   */
+  platformPrinterEnabled: boolean | null
+  /** Feature virtual_capture (Dev). null = ainda não sincronizado. */
+  platformVirtualCaptureEnabled: boolean | null
+  /** Mapa completo de features globais (quando o BE enviar). */
+  platformFeatures: Record<string, boolean> | null
   /** Impressora virtual Windows (entrada iFood → forward para térmica). */
   virtualPrinter: {
     supported: boolean

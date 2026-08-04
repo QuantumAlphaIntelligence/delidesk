@@ -70,9 +70,24 @@ async function readJson(res: Response): Promise<JsonMap> {
   return (await res.json().catch(() => ({}))) as JsonMap
 }
 
+function parseFeaturesMap(raw: unknown): Record<string, boolean> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const out: Record<string, boolean> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'boolean') out[k] = v
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+export type ReportPrintersResult = {
+  delideskPrinterEnabled?: boolean
+  delideskVirtualCaptureEnabled?: boolean
+  features?: Record<string, boolean>
+}
+
 export async function reportPrinters(
   printers: Array<{ name: string; is_default: boolean }>
-): Promise<void> {
+): Promise<ReportPrintersResult> {
   const res = await authedFetch('/printers', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -114,9 +129,29 @@ export async function reportPrinters(
       getMainWindow()?.webContents.send(IPC.AUTH_SESSION_CHANGED, next)
     }
   }
+  const features = parseFeaturesMap(data.features)
+  return {
+    delideskPrinterEnabled:
+      typeof data.delidesk_printer_enabled === 'boolean'
+        ? data.delidesk_printer_enabled
+        : features?.printer,
+    delideskVirtualCaptureEnabled:
+      typeof data.delidesk_virtual_capture_enabled === 'boolean'
+        ? data.delidesk_virtual_capture_enabled
+        : features?.virtual_capture,
+    features
+  }
 }
 
-export async function fetchNextJob(): Promise<AgentJob | null> {
+export type NextJobResult = {
+  job: AgentJob | null
+  delideskPrinterEnabled?: boolean
+  delideskVirtualCaptureEnabled?: boolean
+  features?: Record<string, boolean>
+  platformDisabled?: boolean
+}
+
+export async function fetchNextJob(): Promise<NextJobResult> {
   const res = await authedFetch('/jobs/next', { method: 'GET' })
   const data = await readJson(res)
   if (res.status === 401) {
@@ -130,22 +165,59 @@ export async function fetchNextJob(): Promise<AgentJob | null> {
     )
   }
 
-  const job = data.job
-  if (job == null || typeof job !== 'object') return null
+  const platformDisabled = data.platform_disabled === true
+  const features = parseFeaturesMap(data.features)
+  const delideskPrinterEnabled =
+    typeof data.delidesk_printer_enabled === 'boolean'
+      ? data.delidesk_printer_enabled
+      : features?.printer !== undefined
+        ? features.printer
+        : platformDisabled
+          ? false
+          : undefined
+  const delideskVirtualCaptureEnabled =
+    typeof data.delidesk_virtual_capture_enabled === 'boolean'
+      ? data.delidesk_virtual_capture_enabled
+      : features?.virtual_capture
 
-  const j = job as JsonMap
+  const jobRaw = data.job
+  if (jobRaw == null || typeof jobRaw !== 'object') {
+    return {
+      job: null,
+      delideskPrinterEnabled,
+      delideskVirtualCaptureEnabled,
+      features,
+      platformDisabled
+    }
+  }
+
+  const j = jobRaw as JsonMap
   const id = typeof j.id === 'string' ? j.id : null
   const content =
     typeof j.content_base64 === 'string' ? j.content_base64 : null
-  if (!id || !content) return null
+  if (!id || !content) {
+    return {
+      job: null,
+      delideskPrinterEnabled,
+      delideskVirtualCaptureEnabled,
+      features,
+      platformDisabled
+    }
+  }
 
   return {
-    id,
-    title: typeof j.title === 'string' ? j.title : `Job ${id.slice(0, 8)}`,
-    content_base64: content,
-    order_id: (j.order_id as number | string | null | undefined) ?? null,
-    printer_id: typeof j.printer_id === 'string' ? j.printer_id : null,
-    printer_name: typeof j.printer_name === 'string' ? j.printer_name : null
+    delideskPrinterEnabled,
+    delideskVirtualCaptureEnabled,
+    features,
+    platformDisabled,
+    job: {
+      id,
+      title: typeof j.title === 'string' ? j.title : `Job ${id.slice(0, 8)}`,
+      content_base64: content,
+      order_id: (j.order_id as number | string | null | undefined) ?? null,
+      printer_id: typeof j.printer_id === 'string' ? j.printer_id : null,
+      printer_name: typeof j.printer_name === 'string' ? j.printer_name : null
+    }
   }
 }
 
@@ -211,6 +283,13 @@ export async function postVirtualCapture(payload: {
         typeof data.message === 'string'
           ? data.message
           : `virtual-capture (${res.status})`
+    }
+  }
+  if (data.platform_disabled === true || data.delidesk_printer_enabled === false) {
+    return {
+      ok: true,
+      orderCreated: false,
+      error: 'delidesk_printer_disabled'
     }
   }
   return {

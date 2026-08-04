@@ -67,9 +67,50 @@ let lastCaptureStatus:
   | 'no_order'
   | 'error' = 'idle'
 let lastCaptureMessage: string | undefined
+/** Features globais do Dev (null = ainda não sincronizado com o BE). */
+let platformPrinterEnabled: boolean | null = null
+let platformVirtualCaptureEnabled: boolean | null = null
+let platformFeatures: Record<string, boolean> | null = null
 
 function authMock(): boolean {
   return isAuthMockEnabled(app.isPackaged)
+}
+
+export function applyPlatformFeatures(input: {
+  features?: Record<string, boolean> | null
+  printerEnabled?: boolean | null
+  virtualCaptureEnabled?: boolean | null
+}): void {
+  let changed = false
+  if (input.features && typeof input.features === 'object') {
+    platformFeatures = { ...input.features }
+    changed = true
+    if (typeof input.features.printer === 'boolean') {
+      platformPrinterEnabled = input.features.printer
+    }
+    if (typeof input.features.virtual_capture === 'boolean') {
+      platformVirtualCaptureEnabled = input.features.virtual_capture
+    }
+  }
+  if (typeof input.printerEnabled === 'boolean') {
+    if (platformPrinterEnabled !== input.printerEnabled) {
+      platformPrinterEnabled = input.printerEnabled
+      changed = true
+    }
+  }
+  if (typeof input.virtualCaptureEnabled === 'boolean') {
+    if (platformVirtualCaptureEnabled !== input.virtualCaptureEnabled) {
+      platformVirtualCaptureEnabled = input.virtualCaptureEnabled
+      changed = true
+    }
+  }
+  if (changed) emit()
+}
+
+/** @deprecated use applyPlatformFeatures */
+function setPlatformPrinterEnabled(value: boolean | undefined | null): void {
+  if (typeof value !== 'boolean') return
+  applyPlatformFeatures({ printerEnabled: value })
 }
 
 function storePath(): string {
@@ -112,6 +153,9 @@ export function getSnapshot(): PrintStateSnapshot {
     mockSseRunning: mockSseTimer !== null,
     backendPollRunning: backendPollDesired,
     authMock: authMock(),
+    platformPrinterEnabled,
+    platformVirtualCaptureEnabled,
+    platformFeatures,
     virtualPrinter: {
       supported: process.platform === 'win32',
       installed: vp.installed,
@@ -141,12 +185,17 @@ export async function reportLocalPrinters(): Promise<void> {
   const session = getSession()
   if (!session || isMockSession(session) || authMock()) return
   try {
-    await reportPrinters(
+    const reported = await reportPrinters(
       printers.map((p) => ({
         name: p.name,
         is_default: p.name === defaultPrinter
       }))
     )
+    applyPlatformFeatures({
+      features: reported.features,
+      printerEnabled: reported.delideskPrinterEnabled,
+      virtualCaptureEnabled: reported.delideskVirtualCaptureEnabled
+    })
   } catch (err) {
     console.warn('[print] report printers failed', err)
   }
@@ -196,12 +245,17 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
     contentBase64
   }
   jobs.unshift(job)
+  // Não reenvia RAW/Base64 à térmica — cupom DelivAI só após aprovar no painel.
+  job.status = 'done'
+  job.updatedAt = Date.now()
   persist()
   emit()
-  // 1) Forward para térmica (teste iFood / cozinha)
-  await printBytes(job, bytes, preview)
-  // 2) Upload base64 → IA → pedido em análise (se houver itens)
-  if (bytes.length === 0) return
+  if (bytes.length === 0) {
+    lastCaptureStatus = 'idle'
+    lastCaptureMessage = 'Job virtual vazio'
+    emit()
+    return
+  }
   const session = getSession()
   if (!session || isMockSession(session) || authMock()) {
     lastCaptureStatus = 'idle'
@@ -209,8 +263,15 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
     emit()
     return
   }
+  if (platformVirtualCaptureEnabled === false) {
+    lastCaptureStatus = 'idle'
+    lastCaptureMessage =
+      'Captura iFood desligada pela DelivAI (Dev) — impressora virtual não envia cupom'
+    emit()
+    return
+  }
   lastCaptureStatus = 'sent'
-  lastCaptureMessage = 'Enviando cupom à IA…'
+  lastCaptureMessage = 'Enviando cupom à IA (sem imprimir RAW)…'
   emit()
   try {
     const sha = createHash('sha256').update(bytes).digest('hex')
@@ -220,13 +281,28 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
       contentSha256: sha,
       machineLabel: `${os.hostname()} · DeliDesk`
     })
-    if (!result.ok) {
+    if (
+      result.error === 'delidesk_virtual_capture_disabled' ||
+      result.error === 'delidesk_printer_disabled'
+    ) {
+      applyPlatformFeatures({
+        virtualCaptureEnabled: false,
+        ...(result.error === 'delidesk_printer_disabled'
+          ? { printerEnabled: false }
+          : {})
+      })
+      lastCaptureStatus = 'idle'
+      lastCaptureMessage =
+        result.error === 'delidesk_virtual_capture_disabled'
+          ? 'Captura iFood desligada pela DelivAI (Dev)'
+          : 'DeliDesk Printer desligado pela DelivAI — captura ignorada'
+    } else if (!result.ok) {
       lastCaptureStatus = 'error'
       lastCaptureMessage = result.error || 'Falha ao capturar pedido'
     } else if (result.testPrint && result.orderCreated) {
       lastCaptureStatus = 'test_demo'
       lastCaptureMessage =
-        'Impressão teste detectada — pedido de demonstração no painel (Em análise)'
+        'Impressão teste — pedido demo no painel (aguarde aprovação; cupom DelivAI após aprovar)'
     } else if (result.orderCreated) {
       lastCaptureStatus = 'order_created'
       lastCaptureMessage = result.duplicate
@@ -553,9 +629,19 @@ async function runBackendPollTick(): Promise<void> {
       return
     }
 
-    const agentJob = await fetchNextJob()
+    const next = await fetchNextJob()
+    applyPlatformFeatures({
+      features: next.features,
+      printerEnabled: next.delideskPrinterEnabled,
+      virtualCaptureEnabled: next.delideskVirtualCaptureEnabled
+    })
     pollDelayMs = POLL_BASE_MS
 
+    if (next.platformDisabled || next.delideskPrinterEnabled === false) {
+      return
+    }
+
+    const agentJob = next.job
     if (!agentJob) {
       return
     }

@@ -126,6 +126,26 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
         </div>
       )}
 
+      {state.platformPrinterEnabled === false && (
+        <div
+          className="rounded-xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90"
+          role="status"
+        >
+          Fila do agente desligada pela DelivAI (Dev). Você ainda vê as impressoras, mas cupons
+          DelivAI não chegam até religarem a feature printer.
+        </div>
+      )}
+
+      {state.platformVirtualCaptureEnabled === false && (
+        <div
+          className="rounded-xl border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/90"
+          role="status"
+        >
+          Captura iFood desligada pela DelivAI (Dev). A impressora virtual não envia cupom para criar
+          pedido até religarem virtual_capture.
+        </div>
+      )}
+
       {state.virtualPrinter?.supported && (
         <section className="glass-card rounded-xl px-4 py-3 space-y-2 border-white/15">
           <div className="flex items-start justify-between gap-3">
