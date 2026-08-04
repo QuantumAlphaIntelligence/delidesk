@@ -14,6 +14,9 @@ export type AgentJob = {
   title: string
   content_base64: string
   order_id?: number | string | null
+  /** Impressora Windows alvo (do agent que possui o printer_id no BE). */
+  printer_name?: string | null
+  printer_id?: string | null
 }
 
 export class AgentAuthError extends Error {
@@ -140,7 +143,9 @@ export async function fetchNextJob(): Promise<AgentJob | null> {
     id,
     title: typeof j.title === 'string' ? j.title : `Job ${id.slice(0, 8)}`,
     content_base64: content,
-    order_id: (j.order_id as number | string | null | undefined) ?? null
+    order_id: (j.order_id as number | string | null | undefined) ?? null,
+    printer_id: typeof j.printer_id === 'string' ? j.printer_id : null,
+    printer_name: typeof j.printer_name === 'string' ? j.printer_name : null
   }
 }
 

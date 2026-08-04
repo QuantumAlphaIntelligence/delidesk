@@ -271,9 +271,16 @@ function newJobId(): string {
 async function printBytes(
   job: PrintJob,
   bytes: Buffer,
-  previewText: string
+  previewText: string,
+  preferredPrinter?: string | null
 ): Promise<PrintResult> {
-  const printerName = defaultPrinter
+  const preferred =
+    preferredPrinter &&
+    !isVirtualPrinterName(preferredPrinter) &&
+    printers.some((p) => p.name === preferredPrinter)
+      ? preferredPrinter
+      : null
+  const printerName = preferred ?? defaultPrinter
   if (!printerName) {
     job.status = 'failed'
     job.error = 'Nenhuma impressora padrão'
@@ -566,7 +573,8 @@ async function runBackendPollTick(): Promise<void> {
     console.info('[print] backend job', {
       id: agentJob.id,
       title: agentJob.title,
-      order_id: agentJob.order_id
+      order_id: agentJob.order_id,
+      printer_name: agentJob.printer_name
     })
 
     const bytes = Buffer.from(agentJob.content_base64, 'base64')
@@ -601,7 +609,7 @@ async function runBackendPollTick(): Promise<void> {
       return
     }
 
-    const result = await printBytes(job, bytes, previewText)
+    const result = await printBytes(job, bytes, previewText, agentJob.printer_name)
     const cancelled = job.status === 'cancelled'
     try {
       await postJobResult(
