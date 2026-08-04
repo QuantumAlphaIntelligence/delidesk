@@ -56,6 +56,8 @@ const api = {
     ipcRenderer.invoke(IPC.PRINT_START_BACKEND_POLL) as Promise<PrintStateSnapshot>,
   stopBackendPoll: () =>
     ipcRenderer.invoke(IPC.PRINT_STOP_BACKEND_POLL) as Promise<PrintStateSnapshot>,
+  installVirtualPrinter: () =>
+    ipcRenderer.invoke(IPC.PRINT_INSTALL_VIRTUAL) as Promise<PrintStateSnapshot>,
   onPrintStateChanged: (cb: (state: PrintStateSnapshot) => void): (() => void) => {
     const listener = (_: Electron.IpcRendererEvent, state: PrintStateSnapshot) =>
       cb(state)

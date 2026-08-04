@@ -1,7 +1,8 @@
-import { randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
+import os from 'os'
 import type {
   PrintJob,
   PrintResult,
@@ -19,8 +20,19 @@ import {
   AgentAuthError,
   fetchNextJob,
   postJobResult,
+  postVirtualCapture,
   reportPrinters
 } from './agent-api'
+import {
+  ensureVirtualPrinter,
+  getVirtualPrinterStatus,
+  installVirtualPrinterElevated,
+  isVirtualPrinterName,
+  refreshVirtualInstalledFlag,
+  setVirtualJobHandler,
+  startVirtualPrinterListener,
+  stopVirtualPrinterListener
+} from './virtual-printer-win'
 
 type Persisted = {
   defaultPrinter: string | null
@@ -47,6 +59,14 @@ let backendPollDesired = false
 let pollDelayMs = POLL_BASE_MS
 let pollInFlight = false
 const recentBackendJobIds: string[] = []
+let lastCaptureStatus:
+  | 'idle'
+  | 'sent'
+  | 'order_created'
+  | 'test_demo'
+  | 'no_order'
+  | 'error' = 'idle'
+let lastCaptureMessage: string | undefined
 
 function authMock(): boolean {
   return isAuthMockEnabled(app.isPackaged)
@@ -82,6 +102,7 @@ function emit(): void {
 
 export function getSnapshot(): PrintStateSnapshot {
   const sorted = [...jobs].sort((a, b) => b.createdAt - a.createdAt)
+  const vp = getVirtualPrinterStatus()
   return {
     printers,
     defaultPrinter,
@@ -90,7 +111,16 @@ export function getSnapshot(): PrintStateSnapshot {
     lastSuccess,
     mockSseRunning: mockSseTimer !== null,
     backendPollRunning: backendPollDesired,
-    authMock: authMock()
+    authMock: authMock(),
+    virtualPrinter: {
+      supported: process.platform === 'win32',
+      installed: vp.installed,
+      listening: vp.listening,
+      lastError: vp.lastError,
+      lastForwardAt: vp.lastForwardAt,
+      lastCaptureStatus,
+      lastCaptureMessage
+    }
   }
 }
 
@@ -123,7 +153,10 @@ export async function reportLocalPrinters(): Promise<void> {
 }
 
 export async function refreshPrinters(): Promise<PrintStateSnapshot> {
-  printers = await listPrinters()
+  const all = await listPrinters()
+  // Virtual DeliDesk é entrada (iFood); destino é sempre a térmica física.
+  printers = all.filter((p) => !isVirtualPrinterName(p.name))
+  await refreshVirtualInstalledFlag()
   const stillThere = defaultPrinter && printers.some((p) => p.name === defaultPrinter)
   if (!stillThere) {
     defaultPrinter =
@@ -136,10 +169,98 @@ export async function refreshPrinters(): Promise<PrintStateSnapshot> {
 }
 
 export function setDefaultPrinter(name: string): PrintStateSnapshot {
+  if (isVirtualPrinterName(name)) {
+    return getSnapshot()
+  }
   defaultPrinter = name
   persist()
   emit()
   void reportLocalPrinters()
+  return getSnapshot()
+}
+
+async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
+  const preview =
+    bytes.length > 0
+      ? previewFromEscPos(bytes).slice(0, 400) || `Job virtual (${bytes.length} bytes)`
+      : 'Job virtual vazio'
+  const contentBase64 = bytes.toString('base64')
+  const job: PrintJob = {
+    id: newJobId(),
+    orderLabel: `Virtual #${Date.now().toString().slice(-4)}`,
+    status: 'queued',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    previewText: preview,
+    source: 'virtual',
+    contentBase64
+  }
+  jobs.unshift(job)
+  persist()
+  emit()
+  // 1) Forward para térmica (teste iFood / cozinha)
+  await printBytes(job, bytes, preview)
+  // 2) Upload base64 → IA → pedido em análise (se houver itens)
+  if (bytes.length === 0) return
+  const session = getSession()
+  if (!session || isMockSession(session) || authMock()) {
+    lastCaptureStatus = 'idle'
+    lastCaptureMessage = 'Sem sessão real — captura IA ignorada'
+    emit()
+    return
+  }
+  lastCaptureStatus = 'sent'
+  lastCaptureMessage = 'Enviando cupom à IA…'
+  emit()
+  try {
+    const sha = createHash('sha256').update(bytes).digest('hex')
+    const result = await postVirtualCapture({
+      contentBase64,
+      byteLength: bytes.length,
+      contentSha256: sha,
+      machineLabel: `${os.hostname()} · DeliDesk`
+    })
+    if (!result.ok) {
+      lastCaptureStatus = 'error'
+      lastCaptureMessage = result.error || 'Falha ao capturar pedido'
+    } else if (result.testPrint && result.orderCreated) {
+      lastCaptureStatus = 'test_demo'
+      lastCaptureMessage =
+        'Impressão teste detectada — pedido de demonstração no painel (Em análise)'
+    } else if (result.orderCreated) {
+      lastCaptureStatus = 'order_created'
+      lastCaptureMessage = result.duplicate
+        ? 'Pedido já existia (dedupe)'
+        : `Pedido #${result.orderId ?? '?'} em análise — aprove no painel`
+    } else if (result.testPrint) {
+      lastCaptureStatus = 'test_demo'
+      lastCaptureMessage =
+        'Impressão teste detectada — cadastre produtos no cardápio para ver a demo'
+    } else {
+      lastCaptureStatus = 'no_order'
+      lastCaptureMessage =
+        result.error || 'Job recebido; sem itens para criar pedido'
+    }
+  } catch (err) {
+    if (err instanceof AgentAuthError) {
+      lastCaptureStatus = 'error'
+      lastCaptureMessage = 'Sessão expirada — entre de novo no DeliDesk'
+    } else {
+      lastCaptureStatus = 'error'
+      lastCaptureMessage = 'Não foi possível enviar o cupom. Tente de novo.'
+      console.warn('[virtual-printer] capture upload failed', err)
+    }
+  }
+  emit()
+}
+
+/** CTA na tela Impressão — UAC se necessário. */
+export async function installVirtualPrinter(): Promise<PrintStateSnapshot> {
+  const soft = await ensureVirtualPrinter()
+  if (!soft.ok) {
+    await installVirtualPrinterElevated()
+  }
+  await refreshPrinters()
   return getSnapshot()
 }
 
@@ -561,7 +682,20 @@ export async function initPrintService(): Promise<void> {
   if (session && !isMockSession(session) && !authMock()) {
     clearDemoPrintJobs()
   }
+  setVirtualJobHandler((bytes) => {
+    void handleVirtualPrintJob(bytes)
+  })
+  startVirtualPrinterListener()
+  // Fallback: cria fila Spooler se o instalador NSIS não rodou (dev / sem admin).
+  void ensureVirtualPrinter().then(() => refreshVirtualInstalledFlag().then(() => emit()))
   await refreshPrinters()
   // process leftover queued jobs from previous run
   void processQueued()
+}
+
+export function shutdownPrintService(): void {
+  stopVirtualPrinterListener()
+  setVirtualJobHandler(null)
+  stopBackendPoll()
+  stopMockSse()
 }

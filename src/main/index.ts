@@ -33,12 +33,14 @@ import {
   cancelJob,
   getSnapshot,
   initPrintService,
+  installVirtualPrinter,
   onRealSessionReady,
   printTestCoupon,
   refreshPrinters,
   reprintJob,
   reprintLast,
   setDefaultPrinter,
+  shutdownPrintService,
   startBackendPoll,
   startMockSse,
   stopBackendPoll,
@@ -313,6 +315,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.PRINT_STOP_MOCK_SSE, () => stopMockSse())
   ipcMain.handle(IPC.PRINT_START_BACKEND_POLL, () => startBackendPoll())
   ipcMain.handle(IPC.PRINT_STOP_BACKEND_POLL, () => stopBackendPoll())
+  ipcMain.handle(IPC.PRINT_INSTALL_VIRTUAL, () => installVirtualPrinter())
 
   ipcMain.handle(
     IPC.PANEL_SHOW,
@@ -540,8 +543,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     stopAutoUpdater()
-    stopBackendPoll()
-    stopMockSse()
+    shutdownPrintService()
     destroyPanel()
     destroyTray()
   })

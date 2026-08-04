@@ -15,6 +15,10 @@ extraResources:
     to: channel.json
   - from: resources/icon.png
     to: icon.png
+  - from: resources/install-virtual-printer.ps1
+    to: install-virtual-printer.ps1
+  - from: resources/uninstall-virtual-printer.ps1
+    to: uninstall-virtual-printer.ps1
 # Gera latest.yml + blockmap localmente (upload = CI). URL real vem do channel.json / backend.
 publish:
   provider: generic
@@ -34,6 +38,9 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: DeliDesk
+  include: build/installer.nsh
+  # Admin ajuda a criar a fila Spooler DeliDesk no pós-install
+  allowElevation: true
 linux:
   target:
     - dir

@@ -24,6 +24,7 @@ export type DelideskApi = {
   stopMockSse: () => Promise<PrintStateSnapshot>
   startBackendPoll: () => Promise<PrintStateSnapshot>
   stopBackendPoll: () => Promise<PrintStateSnapshot>
+  installVirtualPrinter: () => Promise<PrintStateSnapshot>
   onPrintStateChanged: (cb: (state: PrintStateSnapshot) => void) => () => void
   showPanel: (mode: PanelMode, bounds: PanelBounds) => Promise<{ ok: boolean }>
   hidePanel: () => Promise<{ ok: boolean }>

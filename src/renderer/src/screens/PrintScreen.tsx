@@ -126,9 +126,59 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
         </div>
       )}
 
+      {state.virtualPrinter?.supported && (
+        <section className="glass-card rounded-xl px-4 py-3 space-y-2 border-white/15">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">Impressora virtual DeliDesk</h2>
+              <p className="text-xs text-delivai-text-gray/70 mt-1">
+                {state.virtualPrinter.installed
+                  ? state.virtualPrinter.listening
+                    ? 'Instalada no Windows · aguardando jobs (ex.: iFood)'
+                    : 'Instalada · listener offline'
+                  : 'Não instalada no Spooler — escolha no iFood após instalar'}
+              </p>
+              {state.virtualPrinter.lastError && (
+                <p className="text-xs text-amber-300/90 mt-1 truncate" title={state.virtualPrinter.lastError}>
+                  {state.virtualPrinter.lastError}
+                </p>
+              )}
+              {state.virtualPrinter.lastCaptureMessage && (
+                <p
+                  className={`text-xs mt-1 ${
+                    state.virtualPrinter.lastCaptureStatus === 'error'
+                      ? 'text-amber-300/90'
+                      : state.virtualPrinter.lastCaptureStatus === 'order_created' ||
+                          state.virtualPrinter.lastCaptureStatus === 'test_demo'
+                        ? 'text-delivai-neon-green'
+                        : 'text-delivai-text-gray/70'
+                  }`}
+                >
+                  {state.virtualPrinter.lastCaptureMessage}
+                </p>
+              )}
+            </div>
+            {!state.virtualPrinter.installed && (
+              <button
+                type="button"
+                className="btn-primary shrink-0 text-xs px-3 py-2"
+                disabled={busy}
+                onClick={() =>
+                  void withBusy(() => window.delidesk.installVirtualPrinter())
+                }
+              >
+                Instalar impressora DeliDesk
+              </button>
+            )}
+          </div>
+        </section>
+      )}
+
       <section className="space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-delivai-text-gray/90">Impressoras</h2>
+          <h2 className="text-sm font-semibold text-delivai-text-gray/90">
+            Impressora física (destino)
+          </h2>
           <button
             type="button"
             className="text-xs font-semibold text-delivai-neon-green"

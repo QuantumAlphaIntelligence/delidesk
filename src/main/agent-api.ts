@@ -165,6 +165,59 @@ export async function postJobResult(
   }
 }
 
+export type VirtualCaptureResult = {
+  ok: boolean
+  orderCreated: boolean
+  orderId?: number | string
+  duplicate?: boolean
+  /** Impressão teste do iFood → pedido de demonstração. */
+  testPrint?: boolean
+  error?: string
+}
+
+/** Envia bytes do spooler (base64) para o BE parsear com IA e criar pedido em análise. */
+export async function postVirtualCapture(payload: {
+  contentBase64: string
+  byteLength: number
+  contentSha256: string
+  machineLabel?: string
+}): Promise<VirtualCaptureResult> {
+  const res = await authedFetch('/virtual-capture', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      content_base64: payload.contentBase64,
+      byte_length: payload.byteLength,
+      content_sha256: payload.contentSha256,
+      machine_label: payload.machineLabel
+    })
+  })
+  const data = await readJson(res)
+  if (res.status === 401) {
+    throw new AgentAuthError(
+      typeof data.message === 'string' ? data.message : 'Não autorizado'
+    )
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      orderCreated: false,
+      error:
+        typeof data.message === 'string'
+          ? data.message
+          : `virtual-capture (${res.status})`
+    }
+  }
+  return {
+    ok: data.ok !== false,
+    orderCreated: data.order_created === true,
+    orderId: (data.order_id as number | string | undefined) ?? undefined,
+    duplicate: data.duplicate === true,
+    testPrint: data.test_print === true,
+    error: typeof data.message === 'string' ? data.message : undefined
+  }
+}
+
 export async function refreshTokens(): Promise<void> {
   await refreshSession()
 }

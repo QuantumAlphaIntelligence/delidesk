@@ -47,6 +47,7 @@ export const IPC = {
   PRINT_STOP_MOCK_SSE: 'print:stop-mock-sse',
   PRINT_START_BACKEND_POLL: 'print:start-backend-poll',
   PRINT_STOP_BACKEND_POLL: 'print:stop-backend-poll',
+  PRINT_INSTALL_VIRTUAL: 'print:install-virtual',
   PRINT_STATE_CHANGED: 'print:state-changed',
   PANEL_SHOW: 'panel:show',
   PANEL_HIDE: 'panel:hide',
