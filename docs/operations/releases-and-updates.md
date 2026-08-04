@@ -84,8 +84,9 @@ Implementação: `src/main/auto-update.ts` + toast `UpdateToast`.
 |---------------|-------------|----------------|
 | Checagem | ~12s após abrir + a cada **6h** | Baixa em background; não imprime/para fila sozinho |
 | `autoDownload` | `true` | Download silencioso |
-| `autoInstallOnAppQuit` | `true` | Aplica ao **fechar** o app (fim de turno / reboot) |
-| `quitAndInstall` | Só se o usuário clicar **Instalar agora** | Reinicia o app **na hora** |
+| `autoInstallOnAppQuit` | `true` | Se adiar o toast, ainda aplica ao **fechar** o app |
+| Reinício automático | ~12s após download | `quitAndInstall` sozinho (toast com contagem); **Depois** cancela o auto e deixa pro fechamento |
+| `quitAndInstall` imediato | Botão **Reiniciar agora** | Reinicia na hora |
 
 ### Regras operacionais (obrigatórias)
 
