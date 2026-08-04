@@ -6,6 +6,10 @@ Stack: Electron + React + TypeScript + Tailwind. Visual alinhado ao front DelivA
 
 > Referência de telas: `backend-delivai/docs/plans/delidesk-apresentacao.html`
 
+## Git / branches
+
+**Nunca** commit ou push direto em `main` ou `develop`. Trabalho só em `feature/…` ou `fix/…` + PR. Inventário alvo: `main` + `develop` + **1** branch de melhoria. Detalhes: [`docs/operations/branches.md`](docs/operations/branches.md) (mesmo padrão do DelivAI).
+
 ## Requisitos
 
 - **Windows** para tray/impressão reais (desenvolvimento de UI também funciona no Linux/WSL com limitações de tray/GUI)
@@ -72,22 +76,30 @@ Com mock off, a fila do app usa **poll do backend** (não a fila mock SSE).
 | `develop` | sandbox (`env.sandbox`) | `DeliDesk-Setup-sandbox-${version}.exe` |
 | `main` | prod (`env.production`) | `DeliDesk-Setup-prod-${version}.exe` |
 
-**Publicação oficial = GitHub Actions** (`windows-latest` + NSIS). Tag `v*` no commit da branch → o workflow escolhe o canal e anexa o `.exe` na Release.
+**Publicação oficial = GitHub Actions** (`windows-latest` + NSIS). Tag `v*` no commit da branch → o workflow escolhe o canal e anexa na Release:
 
-| Release | Artefato | Front (`REACT_APP_PRINT_AGENT_WINDOWS_DOWNLOAD_URL`) |
-|---------|----------|------------------------------------------------------|
-| [v0.1.0](https://github.com/QuantumAlphaIntelligence/delidesk/releases/tag/v0.1.0) (prerelease) | `DeliDesk-Setup-sandbox-0.1.0.exe` | Front sandbox / `.env` local |
-| [v0.1.1](https://github.com/QuantumAlphaIntelligence/delidesk/releases/tag/v0.1.1) | `DeliDesk-Setup-prod-0.1.0.exe` | Front prod (build arg Docker) |
+- `DeliDesk-Setup-{channel}-{version}.exe` (histórico)
+- `DeliDesk-Setup-{channel}.exe` (**nome estável** — sempre a mais nova do canal)
+- `latest.yml` + `.blockmap` (feed do `electron-updater`)
 
-No PC do lojista **não há** `.env`: as URLs vão em `channel.json` dentro do instalador. Dev local continua com `.env.local`.
+### Auto-update (app instalado)
+
+1. Merge no tronco → tag `v*` → Actions publica artefatos.
+2. Backend resolve “latest” (`GET /webhook/public/delidesk-download` e `/delidesk-update/{channel}/…`).
+3. App empacotado checa o feed (`DELIDESK_UPDATE_FEED_URL` no `channel.json`) e mostra toast **Instalar agora**.
+4. Front: botão Baixar usa o mesmo endpoint — **não** é preciso editar URL no `.env` a cada release.
+
+`npm run dev` **não** faz auto-update (só build instalado). Reinício manual em dev continua necessário.
+
+No PC do lojista **não há** `.env`: as URLs vão em `channel.json` dentro do instalador. Dev local: `.env` / `.env.local`.
 
 ```bash
 # Smoke local (Windows; no Linux precisa Wine)
 npm run dist:win:sandbox
-# → release/DeliDesk-Setup-sandbox-0.1.0.exe
+# → release/DeliDesk-Setup-sandbox-*.exe + latest.yml + cópia estável
 ```
 
-**Fora de escopo V1:** Authenticode / SmartScreen, `electron-updater`.
+**Ainda fora de escopo:** Authenticode / SmartScreen (assinatura de código).
 
 ## Estrutura
 

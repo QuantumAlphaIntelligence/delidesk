@@ -48,7 +48,8 @@ export function PdvaiScreen({ online, companyName }: Props): React.JSX.Element {
         <div>
           <h1 className="text-2xl font-bold">Venda no balcão</h1>
           <p className="text-sm text-delivai-text-gray/70 mt-1">
-            {companyName ?? 'Loja'} · PDVAI fallback
+            {companyName ?? 'Loja'} · PDVAI
+            {state.catalog.length === 0 ? ' · aguardando cardápio da loja' : ''}
           </p>
         </div>
         <span className={effectivelyOffline ? 'pill-offline' : 'pill-online'}>
@@ -94,21 +95,32 @@ export function PdvaiScreen({ online, companyName }: Props): React.JSX.Element {
 
       <section className="space-y-2">
         <h2 className="text-sm font-semibold">Cardápio em cache</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {state.catalog.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              disabled={busy}
-              onClick={() => void sell(item.id)}
-              className="glass-card rounded-xl p-4 text-center hover:bg-white/15 transition border-white/20 disabled:opacity-50"
-            >
-              <strong className="block text-sm">{item.name}</strong>
-              <span className="text-xs text-delivai-neon-green">R$ {item.priceLabel}</span>
-              <span className="block text-[10px] text-delivai-text-gray/55 mt-1">cache</span>
-            </button>
-          ))}
-        </div>
+        {state.catalog.length === 0 ? (
+          <div className="glass-card rounded-xl p-4 text-sm text-delivai-text-gray/75 space-y-1">
+            <p className="font-medium text-white/90">Nenhum item da loja neste PC.</p>
+            <p>
+              O X-Burger e similares eram só fixture de desenvolvimento. A venda no balcão
+              com o cardápio real ainda não sincroniza — use Pedido Interno no painel por
+              enquanto.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {state.catalog.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                disabled={busy}
+                onClick={() => void sell(item.id)}
+                className="glass-card rounded-xl p-4 text-center hover:bg-white/15 transition border-white/20 disabled:opacity-50"
+              >
+                <strong className="block text-sm">{item.name}</strong>
+                <span className="text-xs text-delivai-neon-green">R$ {item.priceLabel}</span>
+                <span className="block text-[10px] text-delivai-text-gray/55 mt-1">cache</span>
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="glass-card rounded-xl p-4 space-y-2">

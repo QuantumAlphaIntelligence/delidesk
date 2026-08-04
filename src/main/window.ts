@@ -1,5 +1,20 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, nativeImage, shell } from 'electron'
+import { existsSync } from 'fs'
 import { join } from 'path'
+
+function resolveAppIcon(): Electron.NativeImage | undefined {
+  const candidates = [
+    join(process.resourcesPath, 'icon.png'),
+    join(app.getAppPath(), 'resources', 'icon.png'),
+    join(__dirname, '../../resources/icon.png')
+  ]
+  for (const p of candidates) {
+    if (!existsSync(p)) continue
+    const img = nativeImage.createFromPath(p)
+    if (!img.isEmpty()) return img
+  }
+  return undefined
+}
 
 let mainWindow: BrowserWindow | null = null
 let quitting = false
@@ -18,6 +33,7 @@ export function createMainWindow(): BrowserWindow {
     return mainWindow
   }
 
+  const icon = resolveAppIcon()
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -28,6 +44,7 @@ export function createMainWindow(): BrowserWindow {
     backgroundColor: '#0D3C4F',
     autoHideMenuBar: true,
     title: 'DeliDesk',
+    ...(icon ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,

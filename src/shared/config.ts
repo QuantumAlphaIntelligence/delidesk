@@ -37,29 +37,70 @@ export function getAuthAuthorizeUrl(state: string, machineLabel?: string): strin
   return url.toString()
 }
 
-export function getPanelUrl(): string {
-  return (
-    process.env.DELIDESK_PANEL_URL ||
-    'https://app.delivai.com.br/dashboard/orders'
-  )
-}
-
 /** Origem do front (mesmo host de PANEL/AUTH) para rotas como /delidesk-sso. */
 export function getPanelOrigin(): string {
+  const raw =
+    process.env.DELIDESK_PANEL_URL ||
+    process.env.DELIDESK_AUTH_URL ||
+    'https://app.delivai.com.br/dashboard/orders'
   try {
-    return new URL(getPanelUrl()).origin
+    return new URL(raw).origin
   } catch {
     return 'https://app.delivai.com.br'
   }
 }
 
-/** Conversas / WhatsApp no painel (ou Web Chat). Override com DELIDESK_CHAT_URL. */
+/** Garante query embed=delidesk para o front esconder a sidebar web. */
+export function withEmbedQuery(url: string): string {
+  try {
+    const u = new URL(url)
+    u.searchParams.set('embed', 'delidesk')
+    return u.toString()
+  } catch {
+    return url.includes('?') ? `${url}&embed=delidesk` : `${url}?embed=delidesk`
+  }
+}
+
+export function getPanelPathUrl(path: string): string {
+  const clean = path.startsWith('/') ? path : `/${path}`
+  return withEmbedQuery(`${getPanelOrigin()}${clean}`)
+}
+
+export function getPanelUrl(): string {
+  if (process.env.DELIDESK_PANEL_URL) {
+    return withEmbedQuery(process.env.DELIDESK_PANEL_URL)
+  }
+  return getPanelPathUrl('/dashboard/orders')
+}
+
+/** Conversas / WhatsApp no painel. Override com DELIDESK_CHAT_URL. */
 export function getChatUrl(): string {
-  return (
-    process.env.DELIDESK_CHAT_URL ||
-    process.env.DELIDESK_PANEL_URL ||
-    'https://app.delivai.com.br/dashboard/orders'
-  )
+  if (process.env.DELIDESK_CHAT_URL) {
+    return withEmbedQuery(process.env.DELIDESK_CHAT_URL)
+  }
+  return getPanelPathUrl('/dashboard/conversations')
+}
+
+export function getPanelModeUrl(mode: string): string {
+  switch (mode) {
+    case 'chat':
+      return getChatUrl()
+    case 'delivery':
+      return getPanelPathUrl('/dashboard/delivery')
+    case 'motoboys':
+      return getPanelPathUrl('/dashboard/motoboys')
+    case 'schedule':
+      return getPanelPathUrl('/dashboard/schedule')
+    case 'company':
+      return getPanelPathUrl('/dashboard/company')
+    case 'license':
+      return getPanelPathUrl('/dashboard/license')
+    case 'clients':
+      return getPanelPathUrl('/dashboard/clientes')
+    case 'orders':
+    default:
+      return getPanelUrl()
+  }
 }
 
 export function generatePkce(): { verifier: string; challenge: string; state: string } {

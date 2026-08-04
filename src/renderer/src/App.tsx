@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { AuthSession, AppOnlineStatus } from '@shared/ipc'
 import { LoginScreen } from './screens/LoginScreen'
 import { HomeScreen } from './screens/HomeScreen'
+import { UpdateToast } from './components/UpdateToast'
 
 export default function App(): React.JSX.Element {
   const [session, setSession] = useState<AuthSession | null>(null)
@@ -28,8 +29,16 @@ export default function App(): React.JSX.Element {
           if (next) setLoginError(null)
         })
         unsubError = window.delidesk.onLoginError((message) => {
-          setLoginError(message)
           setLoggingIn(false)
+          // Race: callback duplicado pode emitir erro depois da sessão OK
+          void window.delidesk.getSession().then((s) => {
+            if (s) {
+              setSession(s)
+              setLoginError(null)
+            } else {
+              setLoginError(message)
+            }
+          })
         })
       } finally {
         setBooting(false)
@@ -86,21 +95,27 @@ export default function App(): React.JSX.Element {
 
   if (!session) {
     return (
-      <LoginScreen
-        online={online}
-        loggingIn={loggingIn}
-        error={loginError}
-        onLogin={() => void handleLogin()}
-        onCancelLogin={() => void handleCancelLogin()}
-      />
+      <>
+        <LoginScreen
+          online={online}
+          loggingIn={loggingIn}
+          error={loginError}
+          onLogin={() => void handleLogin()}
+          onCancelLogin={() => void handleCancelLogin()}
+        />
+        <UpdateToast />
+      </>
     )
   }
 
   return (
-    <HomeScreen
-      session={session}
-      online={online}
-      onLogout={() => void handleLogout()}
-    />
+    <>
+      <HomeScreen
+        session={session}
+        online={online}
+        onLogout={() => void handleLogout()}
+      />
+      <UpdateToast />
+    </>
   )
 }
