@@ -3,7 +3,11 @@ export const PROTOCOL = 'delidesk'
 export type AuthSession = {
   accessToken: string
   refreshToken?: string
+  /** Nome fantasia / razão — nunca UUID. */
   companyName?: string
+  companyLogoUrl?: string
+  /** CNPJ só dígitos (UI mascara). */
+  companyCnpj?: string
   companyId?: string
   agentId?: string
   expiresAt?: number
@@ -43,6 +47,7 @@ export const IPC = {
   PRINT_STOP_MOCK_SSE: 'print:stop-mock-sse',
   PRINT_START_BACKEND_POLL: 'print:start-backend-poll',
   PRINT_STOP_BACKEND_POLL: 'print:stop-backend-poll',
+  PRINT_INSTALL_VIRTUAL: 'print:install-virtual',
   PRINT_STATE_CHANGED: 'print:state-changed',
   PANEL_SHOW: 'panel:show',
   PANEL_HIDE: 'panel:hide',
@@ -53,5 +58,15 @@ export const IPC = {
   PDVAI_CREATE_ORDER: 'pdvai:create-order',
   PDVAI_SYNC: 'pdvai:sync',
   PDVAI_SET_FORCE_OFFLINE: 'pdvai:set-force-offline',
-  PDVAI_STATE_CHANGED: 'pdvai:state-changed'
+  PDVAI_STATE_CHANGED: 'pdvai:state-changed',
+  UPDATE_GET_STATUS: 'update:get-status',
+  UPDATE_INSTALL: 'update:install',
+  UPDATE_STATUS: 'update:status'
 } as const
+
+export type UpdateUiStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'available'; version: string }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string }

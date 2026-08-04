@@ -16,11 +16,12 @@
     "dist": "npm run build && electron-builder --dir",
     "dist:win": "npm run build && electron-builder --win --x64 --dir",
     "dist:win:installer": "npm run build && electron-builder --win nsis --x64",
-    "dist:win:sandbox": "npm run bake:sandbox && npm run build && node scripts/run-builder-win.mjs sandbox",
-    "dist:win:prod": "npm run bake:prod && npm run build && node scripts/run-builder-win.mjs prod",
+    "dist:win:sandbox": "npm run bake:sandbox && npm run build && node scripts/run-builder-win.mjs sandbox && node scripts/prepare-release-assets.mjs sandbox",
+    "dist:win:prod": "npm run bake:prod && npm run build && node scripts/run-builder-win.mjs prod && node scripts/prepare-release-assets.mjs prod",
     "dist:linux": "npm run build && electron-builder --linux --dir"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

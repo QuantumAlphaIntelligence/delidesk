@@ -1,4 +1,4 @@
-import type { AuthSession, AppOnlineStatus } from '../../shared/ipc'
+import type { AuthSession, AppOnlineStatus, UpdateUiStatus } from '../../shared/ipc'
 import type { PrintStateSnapshot, PrintResult } from '../../shared/print'
 import type { PanelBounds, PanelMode, PdvaiState } from '../../shared/pdvai'
 
@@ -24,6 +24,7 @@ export type DelideskApi = {
   stopMockSse: () => Promise<PrintStateSnapshot>
   startBackendPoll: () => Promise<PrintStateSnapshot>
   stopBackendPoll: () => Promise<PrintStateSnapshot>
+  installVirtualPrinter: () => Promise<PrintStateSnapshot>
   onPrintStateChanged: (cb: (state: PrintStateSnapshot) => void) => () => void
   showPanel: (mode: PanelMode, bounds: PanelBounds) => Promise<{ ok: boolean }>
   hidePanel: () => Promise<{ ok: boolean }>
@@ -35,6 +36,9 @@ export type DelideskApi = {
   syncPdvai: () => Promise<PdvaiState>
   setPdvaiForceOffline: (value: boolean) => Promise<PdvaiState>
   onPdvaiStateChanged: (cb: (state: PdvaiState) => void) => () => void
+  getUpdateStatus: () => Promise<UpdateUiStatus>
+  installUpdate: () => Promise<{ ok: boolean; error?: string }>
+  onUpdateStatus: (cb: (status: UpdateUiStatus) => void) => () => void
 }
 
 declare global {

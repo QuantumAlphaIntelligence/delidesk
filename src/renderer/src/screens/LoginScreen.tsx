@@ -1,4 +1,5 @@
 import type { AppOnlineStatus } from '@shared/ipc'
+import { DeliDeskMark } from '../components/DeliDeskMark'
 
 type Props = {
   online: AppOnlineStatus
@@ -25,7 +26,8 @@ export function LoginScreen({
       </header>
 
       <main className="flex-1 flex flex-col items-center justify-center px-6 py-10">
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 flex flex-col items-center">
+          <DeliDeskMark className="w-16 h-16 mb-4 shadow-lg shadow-black/30" />
           <h1 className="text-4xl font-bold tracking-tight">
             Deli<span className="text-delivai-neon-green">Desk</span>
           </h1>

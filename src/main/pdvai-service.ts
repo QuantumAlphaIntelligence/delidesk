@@ -1,26 +1,48 @@
-import { randomBytes } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { app, net } from 'electron'
 import type { CatalogItem, PdvaiLocalOrder, PdvaiState } from '../shared/pdvai'
+import { isAuthMockEnabled } from '../shared/config'
 import { buildOrderCoupon } from './escpos'
 import { sendRawToPrinter } from './print-raw'
 import { getSnapshot as getPrintSnapshot } from './print-service'
 import { getMainWindow } from './window'
 import { IPC } from '../shared/ipc'
+import { getSession, isMockSession } from './auth-store'
 
-const DEFAULT_CATALOG: CatalogItem[] = [
+/** Cardápio só para AUTH_MOCK / sessão mock — nunca da loja real. */
+const FIXTURE_CATALOG: CatalogItem[] = [
   { id: 'xb', name: 'X-Burger', price: 28.9, priceLabel: '28,90' },
   { id: 'refri', name: 'Refri', price: 8, priceLabel: '8,00' },
   { id: 'batata', name: 'Batata', price: 12, priceLabel: '12,00' },
   { id: 'combo', name: 'Combo', price: 39.9, priceLabel: '39,90' }
 ]
 
-let catalog: CatalogItem[] = [...DEFAULT_CATALOG]
+const FIXTURE_ITEM_IDS = new Set(FIXTURE_CATALOG.map((c) => c.id))
+
+let catalog: CatalogItem[] = []
 let orders: PdvaiLocalOrder[] = []
 let lastSyncAt: number | null = null
 let forceOffline = false
 let localSeq = 9000
+
+function authMock(): boolean {
+  return isAuthMockEnabled(app.isPackaged)
+}
+
+/** Fixture (X-Burger…) só em mock. Sessão OAuth real nunca usa esse cardápio. */
+function shouldUseFixtureCatalog(): boolean {
+  const session = getSession()
+  if (session && !isMockSession(session)) return false
+  if (authMock()) return true
+  if (!session) return false
+  return isMockSession(session)
+}
+
+function isFixtureCatalog(items: CatalogItem[]): boolean {
+  if (!items.length) return false
+  return items.every((i) => FIXTURE_ITEM_IDS.has(i.id))
+}
 
 function storePath(): string {
   const dir = app.getPath('userData')
@@ -69,6 +91,37 @@ export function getPdvaiState(): PdvaiState {
     lastSyncAt,
     forceOffline
   }
+}
+
+/**
+ * Remove cardápio/pedidos de fixture (X-Burger etc.) — não são da loja autenticada.
+ * Em modo mock, reinsere o cardápio de teste.
+ */
+export function clearDemoPdvai(): PdvaiState {
+  const beforeCatalog = catalog.length
+  const beforeOrders = orders.length
+  if (isFixtureCatalog(catalog)) {
+    catalog = []
+  }
+  orders = orders.filter(
+    (o) => !o.items.every((i) => FIXTURE_ITEM_IDS.has(i.itemId))
+  )
+  if (shouldUseFixtureCatalog()) {
+    catalog = [...FIXTURE_CATALOG]
+  }
+  if (catalog.length !== beforeCatalog || orders.length !== beforeOrders) {
+    console.info('[pdvai] cleared demo/fixture cache', {
+      catalogNow: catalog.length,
+      ordersRemoved: beforeOrders - orders.length
+    })
+    persist()
+    emit()
+  } else if (shouldUseFixtureCatalog() && !catalog.length) {
+    catalog = [...FIXTURE_CATALOG]
+    persist()
+    emit()
+  }
+  return getPdvaiState()
 }
 
 export function setForceOffline(value: boolean): PdvaiState {
@@ -140,5 +193,12 @@ export async function syncPending(): Promise<PdvaiState> {
 
 export function initPdvai(): void {
   load()
+  if (shouldUseFixtureCatalog()) {
+    if (!catalog.length || isFixtureCatalog(catalog)) {
+      catalog = [...FIXTURE_CATALOG]
+    }
+  } else {
+    clearDemoPdvai()
+  }
   emit()
 }

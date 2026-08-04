@@ -1,7 +1,8 @@
-import { randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { app } from 'electron'
+import os from 'os'
 import type {
   PrintJob,
   PrintResult,
@@ -19,8 +20,19 @@ import {
   AgentAuthError,
   fetchNextJob,
   postJobResult,
+  postVirtualCapture,
   reportPrinters
 } from './agent-api'
+import {
+  ensureVirtualPrinter,
+  getVirtualPrinterStatus,
+  installVirtualPrinterElevated,
+  isVirtualPrinterName,
+  refreshVirtualInstalledFlag,
+  setVirtualJobHandler,
+  startVirtualPrinterListener,
+  stopVirtualPrinterListener
+} from './virtual-printer-win'
 
 type Persisted = {
   defaultPrinter: string | null
@@ -47,9 +59,58 @@ let backendPollDesired = false
 let pollDelayMs = POLL_BASE_MS
 let pollInFlight = false
 const recentBackendJobIds: string[] = []
+let lastCaptureStatus:
+  | 'idle'
+  | 'sent'
+  | 'order_created'
+  | 'test_demo'
+  | 'no_order'
+  | 'error' = 'idle'
+let lastCaptureMessage: string | undefined
+/** Features globais do Dev (null = ainda não sincronizado com o BE). */
+let platformPrinterEnabled: boolean | null = null
+let platformVirtualCaptureEnabled: boolean | null = null
+let platformFeatures: Record<string, boolean> | null = null
 
 function authMock(): boolean {
   return isAuthMockEnabled(app.isPackaged)
+}
+
+export function applyPlatformFeatures(input: {
+  features?: Record<string, boolean> | null
+  printerEnabled?: boolean | null
+  virtualCaptureEnabled?: boolean | null
+}): void {
+  let changed = false
+  if (input.features && typeof input.features === 'object') {
+    platformFeatures = { ...input.features }
+    changed = true
+    if (typeof input.features.printer === 'boolean') {
+      platformPrinterEnabled = input.features.printer
+    }
+    if (typeof input.features.virtual_capture === 'boolean') {
+      platformVirtualCaptureEnabled = input.features.virtual_capture
+    }
+  }
+  if (typeof input.printerEnabled === 'boolean') {
+    if (platformPrinterEnabled !== input.printerEnabled) {
+      platformPrinterEnabled = input.printerEnabled
+      changed = true
+    }
+  }
+  if (typeof input.virtualCaptureEnabled === 'boolean') {
+    if (platformVirtualCaptureEnabled !== input.virtualCaptureEnabled) {
+      platformVirtualCaptureEnabled = input.virtualCaptureEnabled
+      changed = true
+    }
+  }
+  if (changed) emit()
+}
+
+/** @deprecated use applyPlatformFeatures */
+function setPlatformPrinterEnabled(value: boolean | undefined | null): void {
+  if (typeof value !== 'boolean') return
+  applyPlatformFeatures({ printerEnabled: value })
 }
 
 function storePath(): string {
@@ -82,6 +143,7 @@ function emit(): void {
 
 export function getSnapshot(): PrintStateSnapshot {
   const sorted = [...jobs].sort((a, b) => b.createdAt - a.createdAt)
+  const vp = getVirtualPrinterStatus()
   return {
     printers,
     defaultPrinter,
@@ -90,7 +152,19 @@ export function getSnapshot(): PrintStateSnapshot {
     lastSuccess,
     mockSseRunning: mockSseTimer !== null,
     backendPollRunning: backendPollDesired,
-    authMock: authMock()
+    authMock: authMock(),
+    platformPrinterEnabled,
+    platformVirtualCaptureEnabled,
+    platformFeatures,
+    virtualPrinter: {
+      supported: process.platform === 'win32',
+      installed: vp.installed,
+      listening: vp.listening,
+      lastError: vp.lastError,
+      lastForwardAt: vp.lastForwardAt,
+      lastCaptureStatus,
+      lastCaptureMessage
+    }
   }
 }
 
@@ -111,19 +185,27 @@ export async function reportLocalPrinters(): Promise<void> {
   const session = getSession()
   if (!session || isMockSession(session) || authMock()) return
   try {
-    await reportPrinters(
+    const reported = await reportPrinters(
       printers.map((p) => ({
         name: p.name,
         is_default: p.name === defaultPrinter
       }))
     )
+    applyPlatformFeatures({
+      features: reported.features,
+      printerEnabled: reported.delideskPrinterEnabled,
+      virtualCaptureEnabled: reported.delideskVirtualCaptureEnabled
+    })
   } catch (err) {
     console.warn('[print] report printers failed', err)
   }
 }
 
 export async function refreshPrinters(): Promise<PrintStateSnapshot> {
-  printers = await listPrinters()
+  const all = await listPrinters()
+  // Virtual DeliDesk é entrada (iFood); destino é sempre a térmica física.
+  printers = all.filter((p) => !isVirtualPrinterName(p.name))
+  await refreshVirtualInstalledFlag()
   const stillThere = defaultPrinter && printers.some((p) => p.name === defaultPrinter)
   if (!stillThere) {
     defaultPrinter =
@@ -136,10 +218,125 @@ export async function refreshPrinters(): Promise<PrintStateSnapshot> {
 }
 
 export function setDefaultPrinter(name: string): PrintStateSnapshot {
+  if (isVirtualPrinterName(name)) {
+    return getSnapshot()
+  }
   defaultPrinter = name
   persist()
   emit()
   void reportLocalPrinters()
+  return getSnapshot()
+}
+
+async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
+  const preview =
+    bytes.length > 0
+      ? previewFromEscPos(bytes).slice(0, 400) || `Job virtual (${bytes.length} bytes)`
+      : 'Job virtual vazio'
+  const contentBase64 = bytes.toString('base64')
+  const job: PrintJob = {
+    id: newJobId(),
+    orderLabel: `Virtual #${Date.now().toString().slice(-4)}`,
+    status: 'queued',
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    previewText: preview,
+    source: 'virtual',
+    contentBase64
+  }
+  jobs.unshift(job)
+  // Não reenvia RAW/Base64 à térmica — cupom DelivAI só após aprovar no painel.
+  job.status = 'done'
+  job.updatedAt = Date.now()
+  persist()
+  emit()
+  if (bytes.length === 0) {
+    lastCaptureStatus = 'idle'
+    lastCaptureMessage = 'Job virtual vazio'
+    emit()
+    return
+  }
+  const session = getSession()
+  if (!session || isMockSession(session) || authMock()) {
+    lastCaptureStatus = 'idle'
+    lastCaptureMessage = 'Sem sessão real — captura IA ignorada'
+    emit()
+    return
+  }
+  if (platformVirtualCaptureEnabled === false) {
+    lastCaptureStatus = 'idle'
+    lastCaptureMessage =
+      'Captura iFood desligada pela DelivAI (Dev) — impressora virtual não envia cupom'
+    emit()
+    return
+  }
+  lastCaptureStatus = 'sent'
+  lastCaptureMessage = 'Enviando cupom à IA (sem imprimir RAW)…'
+  emit()
+  try {
+    const sha = createHash('sha256').update(bytes).digest('hex')
+    const result = await postVirtualCapture({
+      contentBase64,
+      byteLength: bytes.length,
+      contentSha256: sha,
+      machineLabel: `${os.hostname()} · DeliDesk`
+    })
+    if (
+      result.error === 'delidesk_virtual_capture_disabled' ||
+      result.error === 'delidesk_printer_disabled'
+    ) {
+      applyPlatformFeatures({
+        virtualCaptureEnabled: false,
+        ...(result.error === 'delidesk_printer_disabled'
+          ? { printerEnabled: false }
+          : {})
+      })
+      lastCaptureStatus = 'idle'
+      lastCaptureMessage =
+        result.error === 'delidesk_virtual_capture_disabled'
+          ? 'Captura iFood desligada pela DelivAI (Dev)'
+          : 'DeliDesk Printer desligado pela DelivAI — captura ignorada'
+    } else if (!result.ok) {
+      lastCaptureStatus = 'error'
+      lastCaptureMessage = result.error || 'Falha ao capturar pedido'
+    } else if (result.testPrint && result.orderCreated) {
+      lastCaptureStatus = 'test_demo'
+      lastCaptureMessage =
+        'Impressão teste — pedido demo no painel (aguarde aprovação; cupom DelivAI após aprovar)'
+    } else if (result.orderCreated) {
+      lastCaptureStatus = 'order_created'
+      lastCaptureMessage = result.duplicate
+        ? 'Pedido já existia (dedupe)'
+        : `Pedido #${result.orderId ?? '?'} em análise — aprove no painel`
+    } else if (result.testPrint) {
+      lastCaptureStatus = 'test_demo'
+      lastCaptureMessage =
+        'Impressão teste detectada — cadastre produtos no cardápio para ver a demo'
+    } else {
+      lastCaptureStatus = 'no_order'
+      lastCaptureMessage =
+        result.error || 'Job recebido; sem itens para criar pedido'
+    }
+  } catch (err) {
+    if (err instanceof AgentAuthError) {
+      lastCaptureStatus = 'error'
+      lastCaptureMessage = 'Sessão expirada — entre de novo no DeliDesk'
+    } else {
+      lastCaptureStatus = 'error'
+      lastCaptureMessage = 'Não foi possível enviar o cupom. Tente de novo.'
+      console.warn('[virtual-printer] capture upload failed', err)
+    }
+  }
+  emit()
+}
+
+/** CTA na tela Impressão — UAC se necessário. */
+export async function installVirtualPrinter(): Promise<PrintStateSnapshot> {
+  const soft = await ensureVirtualPrinter()
+  if (!soft.ok) {
+    await installVirtualPrinterElevated()
+  }
+  await refreshPrinters()
   return getSnapshot()
 }
 
@@ -150,9 +347,16 @@ function newJobId(): string {
 async function printBytes(
   job: PrintJob,
   bytes: Buffer,
-  previewText: string
+  previewText: string,
+  preferredPrinter?: string | null
 ): Promise<PrintResult> {
-  const printerName = defaultPrinter
+  const preferred =
+    preferredPrinter &&
+    !isVirtualPrinterName(preferredPrinter) &&
+    printers.some((p) => p.name === preferredPrinter)
+      ? preferredPrinter
+      : null
+  const printerName = preferred ?? defaultPrinter
   if (!printerName) {
     job.status = 'failed'
     job.error = 'Nenhuma impressora padrão'
@@ -425,9 +629,19 @@ async function runBackendPollTick(): Promise<void> {
       return
     }
 
-    const agentJob = await fetchNextJob()
+    const next = await fetchNextJob()
+    applyPlatformFeatures({
+      features: next.features,
+      printerEnabled: next.delideskPrinterEnabled,
+      virtualCaptureEnabled: next.delideskVirtualCaptureEnabled
+    })
     pollDelayMs = POLL_BASE_MS
 
+    if (next.platformDisabled || next.delideskPrinterEnabled === false) {
+      return
+    }
+
+    const agentJob = next.job
     if (!agentJob) {
       return
     }
@@ -445,7 +659,8 @@ async function runBackendPollTick(): Promise<void> {
     console.info('[print] backend job', {
       id: agentJob.id,
       title: agentJob.title,
-      order_id: agentJob.order_id
+      order_id: agentJob.order_id,
+      printer_name: agentJob.printer_name
     })
 
     const bytes = Buffer.from(agentJob.content_base64, 'base64')
@@ -480,7 +695,7 @@ async function runBackendPollTick(): Promise<void> {
       return
     }
 
-    const result = await printBytes(job, bytes, previewText)
+    const result = await printBytes(job, bytes, previewText, agentJob.printer_name)
     const cancelled = job.status === 'cancelled'
     try {
       await postJobResult(
@@ -525,16 +740,56 @@ export function stopBackendPoll(): PrintStateSnapshot {
   return getSnapshot()
 }
 
-/** Após login real: reporta impressoras e inicia poll. */
+/**
+ * Remove cupons de fixture/mock da fila local (LOJA CENTRO / Maria / mock-sse).
+ * Esses jobs ficam em userData/print-queue.json e NÃO são da loja autenticada.
+ */
+export function clearDemoPrintJobs(): PrintStateSnapshot {
+  const before = jobs.length
+  jobs = jobs.filter((j) => {
+    if (j.source === 'test' || j.source === 'mock-sse') return false
+    const preview = (j.previewText ?? '').toUpperCase()
+    if (preview.includes('FIXTURE DE TESTE')) return false
+    if (preview.includes('LOJA CENTRO') && preview.includes('MARIA')) return false
+    return true
+  })
+  if (jobs.length !== before) {
+    console.info('[print] cleared demo/fixture jobs', { removed: before - jobs.length })
+    persist()
+    emit()
+  }
+  return getSnapshot()
+}
+
+/** Após login real: limpa fixtures locais, reporta impressoras e inicia poll. */
 export async function onRealSessionReady(): Promise<void> {
   stopMockSse()
+  clearDemoPrintJobs()
   await refreshPrinters()
   startBackendPoll()
 }
 
 export async function initPrintService(): Promise<void> {
   load()
+  // Se já há sessão real (cold start), não reexibir fila de mock de runs anteriores
+  const session = getSession()
+  if (session && !isMockSession(session) && !authMock()) {
+    clearDemoPrintJobs()
+  }
+  setVirtualJobHandler((bytes) => {
+    void handleVirtualPrintJob(bytes)
+  })
+  startVirtualPrinterListener()
+  // Fallback: cria fila Spooler se o instalador NSIS não rodou (dev / sem admin).
+  void ensureVirtualPrinter().then(() => refreshVirtualInstalledFlag().then(() => emit()))
   await refreshPrinters()
   // process leftover queued jobs from previous run
   void processQueued()
+}
+
+export function shutdownPrintService(): void {
+  stopVirtualPrinterListener()
+  setVirtualJobHandler(null)
+  stopBackendPoll()
+  stopMockSse()
 }

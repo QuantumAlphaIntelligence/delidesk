@@ -27,7 +27,7 @@ if (!existsSync(envPath)) {
 }
 
 /** @type {Record<string, string>} */
-const baked = { channel }
+const baked = { channel, DELIDESK_CHANNEL: channel }
 
 for (const raw of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
   const line = raw.trim()
@@ -45,6 +45,11 @@ for (const raw of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
   if (key.startsWith('DELIDESK_')) {
     baked[key] = value
   }
+}
+
+const apiBase = (baked.DELIDESK_API_URL || '').replace(/\/$/, '')
+if (apiBase && !baked.DELIDESK_UPDATE_FEED_URL) {
+  baked.DELIDESK_UPDATE_FEED_URL = `${apiBase}/webhook/public/delidesk-update/${channel}`
 }
 
 const outDir = join(root, 'resources')

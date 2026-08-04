@@ -1,10 +1,23 @@
 import { app, Menu, Tray, nativeImage } from 'electron'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import { getMainWindow, markAppQuitting } from './window'
 import { printTestCoupon } from './print-service'
 
 let tray: Tray | null = null
 
 function trayIcon(): Electron.NativeImage {
+  const candidates = [
+    join(process.resourcesPath, 'icon.png'),
+    join(app.getAppPath(), 'resources', 'icon.png'),
+    join(__dirname, '../../resources/icon.png')
+  ]
+  for (const p of candidates) {
+    if (!existsSync(p)) continue
+    const img = nativeImage.createFromPath(p)
+    if (!img.isEmpty()) return img.resize({ width: 16, height: 16 })
+  }
+  // fallback sólido mint
   const size = 16
   const canvas = Buffer.alloc(size * size * 4)
   for (let y = 0; y < size; y++) {

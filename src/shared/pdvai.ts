@@ -1,4 +1,12 @@
-export type PanelMode = 'orders' | 'chat'
+export type PanelMode =
+  | 'orders'
+  | 'chat'
+  | 'delivery'
+  | 'motoboys'
+  | 'schedule'
+  | 'company'
+  | 'license'
+  | 'clients'
 
 export type PanelBounds = {
   x: number

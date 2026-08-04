@@ -41,6 +41,9 @@ function loadChannelJson(): void {
     if (!existsSync(filePath)) continue
     try {
       const data = JSON.parse(readFileSync(filePath, 'utf8')) as Record<string, unknown>
+      if (typeof data.channel === 'string' && process.env.DELIDESK_CHANNEL === undefined) {
+        process.env.DELIDESK_CHANNEL = data.channel
+      }
       for (const [key, raw] of Object.entries(data)) {
         if (key === 'channel' || typeof raw !== 'string') continue
         if (process.env[key] === undefined) {
