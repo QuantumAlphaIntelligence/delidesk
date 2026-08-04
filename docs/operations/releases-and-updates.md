@@ -52,10 +52,11 @@ Identidade = **versão + canal + API**.
 | Merge PR → `develop` | Código no tronco sandbox. **Não** publica `.exe` sozinho. |
 | Merge PR → `main` | Código no tronco prod. **Não** publica `.exe` sozinho. |
 | **Release Windows** (Actions) | Gera `.exe` + `latest.yml` + GitHub Release. Disparo: tag `v*` **ou** `workflow_dispatch` (canal `sandbox` \| `prod` + ref). |
+| Tag recomendada (prod) | Após bump em `main`: `git tag vX.Y.Z && git push origin vX.Y.Z` — garante publish no GitHub Releases (feed do download). |
 
-Canal na Actions: commit em `main` → prod; só em `develop` → sandbox. Em `workflow_dispatch`, o input `channel` manda.
+Canal na Actions: commit em `main` → prod; só em `develop` → sandbox. Em `workflow_dispatch`, o input `channel` manda; a release usa `tag_name: v{version}` do `package.json`.
 
-Sem Actions de release bem-sucedida, o cliente **continua** na versão antiga do feed — mesmo com `main` atualizado no Git.
+Sem **Publish GitHub Release** concluído (não só o artifact do Actions), o painel/cliente **continua** na versão antiga do feed — mesmo com `main` atualizado no Git.
 
 ---
 
