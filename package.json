@@ -1,6 +1,6 @@
 {
   "name": "delidesk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "DeliDesk — app da loja DelivAI (impressão, painel, PDVAI)",
   "main": "./out/main/index.js",
   "author": "DelivAI",
