@@ -66,6 +66,7 @@ import {
 import {
   getUpdateStatus,
   installDownloadedUpdate,
+  postponeDownloadedUpdate,
   startAutoUpdater,
   stopAutoUpdater
 } from './auto-update'
@@ -354,6 +355,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.UPDATE_GET_STATUS, () => getUpdateStatus())
   ipcMain.handle(IPC.UPDATE_INSTALL, () => installDownloadedUpdate())
+  ipcMain.handle(IPC.UPDATE_POSTPONE, () => postponeDownloadedUpdate())
 }
 
 function findDeeplink(argv: string[]): string | undefined {

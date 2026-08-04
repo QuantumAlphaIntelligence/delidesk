@@ -61,6 +61,7 @@ export const IPC = {
   PDVAI_STATE_CHANGED: 'pdvai:state-changed',
   UPDATE_GET_STATUS: 'update:get-status',
   UPDATE_INSTALL: 'update:install',
+  UPDATE_POSTPONE: 'update:postpone',
   UPDATE_STATUS: 'update:status'
 } as const
 
@@ -68,5 +69,10 @@ export type UpdateUiStatus =
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'available'; version: string }
-  | { state: 'downloaded'; version: string }
+  | {
+      state: 'downloaded'
+      version: string
+      /** Segundos até reinício automático; omitido se adiado. */
+      autoRestartInSec?: number
+    }
   | { state: 'error'; message: string }
