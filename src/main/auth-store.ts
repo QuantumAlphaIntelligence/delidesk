@@ -62,6 +62,7 @@ export function saveMockSession(companyName: string): AuthSession {
 
 type TokenResponse = {
   ok?: boolean
+  status?: string
   access_token?: string
   refresh_token?: string
   expires_in?: number
@@ -70,6 +71,11 @@ type TokenResponse = {
   panel_sso_code?: string
   message?: string
 }
+
+export type AuthPollResult =
+  | { status: 'pending' }
+  | { status: 'consumed' }
+  | { status: 'authorized'; session: AuthSession; panelSsoCode?: string }
 
 export type TokenExchangeResult = {
   session: AuthSession
@@ -88,7 +94,44 @@ function sessionFromTokenResponse(data: TokenResponse): AuthSession {
   }
 }
 
-/** Troca authorization code + PKCE por device tokens no backend. */
+/**
+ * Poll após o lojista autorizar no browser — evita delidesk:// e o popup “Abrir Electron?”.
+ * Pendente → `{ status: 'pending' }`; autorizado → grava sessão e devolve tokens.
+ */
+export async function pollAuthForTokens(
+  state: string,
+  codeVerifier: string
+): Promise<AuthPollResult> {
+  const url = `${getBackendBaseUrl()}/webhook/agent/oauth/poll`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      state,
+      code_verifier: codeVerifier,
+      redirect_uri: REDIRECT_URI,
+      client_id: 'delidesk'
+    })
+  })
+  const data = (await res.json().catch(() => ({}))) as TokenResponse
+  if (!res.ok) {
+    throw new Error(data.message || `Falha no poll (${res.status})`)
+  }
+  if (data.status === 'pending') return { status: 'pending' }
+  if (data.status === 'consumed') return { status: 'consumed' }
+  if (data.access_token) {
+    const session = sessionFromTokenResponse(data)
+    setSession(session)
+    return {
+      status: 'authorized',
+      session,
+      panelSsoCode: data.panel_sso_code?.trim() || undefined
+    }
+  }
+  throw new Error(data.message || 'Resposta de poll inválida')
+}
+
+/** Troca authorization code + PKCE por device tokens no backend (legado delidesk://). */
 export async function exchangeCodeForTokens(
   code: string,
   codeVerifier: string

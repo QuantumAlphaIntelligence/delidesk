@@ -80,7 +80,7 @@ jobs:
       - name: Install
         run: npm ci
 
-      - name: Bake channel + build NSIS
+      - name: Bake channel + build NSIS + stable assets
         env:
           CHANNEL: ${{ steps.meta.outputs.channel }}
         shell: bash
@@ -90,19 +90,26 @@ jobs:
           else
             npm run dist:win:sandbox
           fi
+          ls -la release/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: DeliDesk-Setup-${{ steps.meta.outputs.channel }}-${{ steps.meta.outputs.version }}
-          path: release/DeliDesk-Setup-*.exe
+          path: |
+            release/DeliDesk-Setup-*.exe
+            release/DeliDesk-Setup-*.exe.blockmap
+            release/latest.yml
           if-no-files-found: error
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/DeliDesk-Setup-*.exe
+          files: |
+            release/DeliDesk-Setup-*.exe
+            release/DeliDesk-Setup-*.exe.blockmap
+            release/latest.yml
           generate_release_notes: true
           prerelease: ${{ steps.meta.outputs.channel == 'sandbox' }}
           fail_on_unmatched_files: true

@@ -24,6 +24,7 @@ import {
   exchangeCodeForTokens,
   getSession,
   isMockSession,
+  pollAuthForTokens,
   saveMockSession,
   saveSessionFromCallback
 } from './auth-store'
@@ -59,6 +60,12 @@ import {
   setForceOffline,
   syncPending
 } from './pdvai-service'
+import {
+  getUpdateStatus,
+  installDownloadedUpdate,
+  startAutoUpdater,
+  stopAutoUpdater
+} from './auto-update'
 import type { PanelBounds, PanelMode } from '../shared/pdvai'
 
 type PendingAuth = {
@@ -71,6 +78,13 @@ const AUTH_LOGIN_TIMEOUT_MS = 3 * 60 * 1000
 
 let pendingAuth: PendingAuth | null = null
 let authTimeout: NodeJS.Timeout | null = null
+let authPollTimer: NodeJS.Timeout | null = null
+let authPollGeneration = 0
+/** Evita 2º callback (Windows second-instance + open-url) apagar sessão já gravada. */
+let lastHandledAuthCode: string | null = null
+let authCallbackInFlight = false
+
+const AUTH_POLL_MS = 1500
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -97,23 +111,97 @@ function clearAuthWait(): void {
     clearTimeout(authTimeout)
     authTimeout = null
   }
+  if (authPollTimer) {
+    clearTimeout(authPollTimer)
+    authPollTimer = null
+  }
+  authPollGeneration += 1
 }
 
 function armAuthWait(): void {
   clearAuthWait()
+  const generation = authPollGeneration
   authTimeout = setTimeout(() => {
     authTimeout = null
-    if (!pendingAuth) return
+    if (!pendingAuth || generation !== authPollGeneration) return
     pendingAuth = null
+    clearAuthWait()
     console.warn('[auth] login timeout')
     notifyAuthError(
       'Tempo esgotado: autorização não concluída. Clique em Entrar e tente de novo.'
     )
   }, AUTH_LOGIN_TIMEOUT_MS)
+  scheduleAuthPoll(generation, 800)
+}
+
+function scheduleAuthPoll(generation: number, delayMs: number): void {
+  if (authPollTimer) {
+    clearTimeout(authPollTimer)
+    authPollTimer = null
+  }
+  authPollTimer = setTimeout(() => {
+    authPollTimer = null
+    void runAuthPollTick(generation)
+  }, delayMs)
+}
+
+async function runAuthPollTick(generation: number): Promise<void> {
+  if (generation !== authPollGeneration) return
+  const pending = pendingAuth
+  if (!pending) return
+
+  try {
+    const result = await pollAuthForTokens(pending.state, pending.verifier)
+    if (generation !== authPollGeneration || pendingAuth?.state !== pending.state) return
+
+    if (result.status === 'pending') {
+      scheduleAuthPoll(generation, AUTH_POLL_MS)
+      return
+    }
+    if (result.status === 'consumed') {
+      // Já consumido por outro caminho (ex.: deep link legado)
+      if (restoreSessionToUi(getMainWindow())) {
+        pendingAuth = null
+        clearAuthWait()
+        return
+      }
+      scheduleAuthPoll(generation, AUTH_POLL_MS)
+      return
+    }
+
+    pendingAuth = null
+    clearAuthWait()
+    const win = getMainWindow()
+    win?.show()
+    win?.focus()
+    console.info('[auth] session ok via poll', {
+      companyId: result.session.companyId,
+      agentId: result.session.agentId
+    })
+    win?.webContents.send(IPC.AUTH_SESSION_CHANGED, result.session)
+    if (result.panelSsoCode) {
+      try {
+        await seedPanelSession(result.panelSsoCode)
+      } catch (seedErr) {
+        console.warn('[auth] panel SSO seed failed', seedErr)
+      }
+    }
+    await onRealSessionReady()
+  } catch (err) {
+    if (generation !== authPollGeneration || !pendingAuth) return
+    const msg = err instanceof Error ? err.message : String(err)
+    // 404 enquanto o start ainda propaga — segue tentando
+    if (/não encontrada|not_found|404/i.test(msg)) {
+      scheduleAuthPoll(generation, AUTH_POLL_MS)
+      return
+    }
+    console.warn('[auth] poll tick failed', msg)
+    scheduleAuthPoll(generation, Math.min(AUTH_POLL_MS * 2, 5000))
+  }
 }
 
 function cancelAuthWait(message?: string): void {
-  const hadPending = pendingAuth !== null || authTimeout !== null
+  const hadPending = pendingAuth !== null || authTimeout !== null || authPollTimer !== null
   pendingAuth = null
   clearAuthWait()
   if (hadPending && message) notifyAuthError(message)
@@ -152,7 +240,12 @@ function registerIpc(): void {
         }
       } catch (err) {
         pendingAuth = null
-        const msg = err instanceof Error ? err.message : String(err)
+        const raw = err instanceof Error ? err.message : String(err)
+        const base = getBackendBaseUrl()
+        const msg =
+          /fetch failed|ECONNREFUSED|ENOTFOUND|network/i.test(raw)
+            ? `Não foi possível falar com a API (${base}). Confira DELIDESK_API_URL e se o backend de teste está no ar.`
+            : raw
         return { ok: false, mock: false, error: msg }
       }
     }
@@ -252,6 +345,9 @@ function registerIpc(): void {
   ipcMain.handle(IPC.PDVAI_SET_FORCE_OFFLINE, (_e, value: boolean) =>
     setForceOffline(value)
   )
+
+  ipcMain.handle(IPC.UPDATE_GET_STATUS, () => getUpdateStatus())
+  ipcMain.handle(IPC.UPDATE_INSTALL, () => installDownloadedUpdate())
 }
 
 function findDeeplink(argv: string[]): string | undefined {
@@ -276,8 +372,19 @@ function registerProtocolClient(): void {
   }
 }
 
+function restoreSessionToUi(win: BrowserWindow | null | undefined): boolean {
+  const existing = getSession()
+  if (!existing || isMockSession(existing)) return false
+  win?.webContents.send(IPC.AUTH_SESSION_CHANGED, existing)
+  return true
+}
+
 async function handleAuthCallback(url: string): Promise<void> {
   console.info('[auth] callback received', url.slice(0, 80))
+  if (authCallbackInFlight) {
+    console.warn('[auth] ignoring overlapping callback')
+    return
+  }
   try {
     const parsed = new URL(url)
     if (parsed.hostname !== 'auth' || !parsed.pathname.startsWith('/callback')) {
@@ -289,6 +396,14 @@ async function handleAuthCallback(url: string): Promise<void> {
     const state = parsed.searchParams.get('state')
     if (!code) {
       notifyAuthError('Callback sem code — tente Entrar de novo')
+      return
+    }
+    if (lastHandledAuthCode === code) {
+      console.warn('[auth] ignoring duplicate callback code')
+      const win = getMainWindow()
+      win?.show()
+      win?.focus()
+      restoreSessionToUi(win)
       return
     }
     if (pendingAuth && state && state !== pendingAuth.state) {
@@ -305,6 +420,7 @@ async function handleAuthCallback(url: string): Promise<void> {
     win?.focus()
 
     if (useAuthMock()) {
+      lastHandledAuthCode = code
       const session = saveSessionFromCallback(code)
       win?.webContents.send(IPC.AUTH_SESSION_CHANGED, session)
       startMockSse()
@@ -312,13 +428,19 @@ async function handleAuthCallback(url: string): Promise<void> {
     }
 
     if (!verifier) {
+      // 2º disparo do protocolo após login OK: não zerar a UI
+      if (restoreSessionToUi(win)) {
+        console.info('[auth] callback sem PKCE, sessão já presente — mantendo login')
+        return
+      }
       notifyAuthError(
         'Login incompleto: o app não tinha o PKCE (reinicie Entrar com DelivAI e autorize na mesma sessão)'
       )
-      win?.webContents.send(IPC.AUTH_SESSION_CHANGED, null)
       return
     }
 
+    authCallbackInFlight = true
+    lastHandledAuthCode = code
     try {
       const { session, panelSsoCode } = await exchangeCodeForTokens(code, verifier)
       console.info('[auth] session ok', { companyId: session.companyId, agentId: session.agentId })
@@ -333,14 +455,22 @@ async function handleAuthCallback(url: string): Promise<void> {
       await onRealSessionReady()
     } catch (err) {
       console.error('[auth] token exchange failed', err)
+      if (restoreSessionToUi(win)) {
+        notifyAuthError(
+          'Não foi possível renovar o login agora, mas a sessão anterior foi mantida. Recarregue o painel se precisar.'
+        )
+        return
+      }
       const msg = err instanceof Error ? err.message : String(err)
       notifyAuthError(msg)
-      win?.webContents.send(IPC.AUTH_SESSION_CHANGED, null)
+    } finally {
+      authCallbackInFlight = false
     }
   } catch (err) {
     console.error('[auth] malformed callback', err)
     clearAuthWait()
     pendingAuth = null
+    authCallbackInFlight = false
     notifyAuthError('Callback de login inválido')
   }
 }
@@ -372,6 +502,7 @@ if (!gotLock) {
     createMainWindow()
     createTray()
     initPdvai()
+    startAutoUpdater(getMainWindow)
     void initPrintService().then(() => {
       const session = getSession()
       if (useAuthMock()) {
@@ -400,6 +531,7 @@ if (!gotLock) {
   })
 
   app.on('before-quit', () => {
+    stopAutoUpdater()
     stopBackendPoll()
     stopMockSse()
     destroyPanel()

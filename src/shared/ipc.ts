@@ -53,5 +53,15 @@ export const IPC = {
   PDVAI_CREATE_ORDER: 'pdvai:create-order',
   PDVAI_SYNC: 'pdvai:sync',
   PDVAI_SET_FORCE_OFFLINE: 'pdvai:set-force-offline',
-  PDVAI_STATE_CHANGED: 'pdvai:state-changed'
+  PDVAI_STATE_CHANGED: 'pdvai:state-changed',
+  UPDATE_GET_STATUS: 'update:get-status',
+  UPDATE_INSTALL: 'update:install',
+  UPDATE_STATUS: 'update:status'
 } as const
+
+export type UpdateUiStatus =
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'available'; version: string }
+  | { state: 'downloaded'; version: string }
+  | { state: 'error'; message: string }

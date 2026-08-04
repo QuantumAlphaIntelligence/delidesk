@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type AuthSession } from '../shared/ipc'
+import { IPC, type AuthSession, type UpdateUiStatus } from '../shared/ipc'
 import type { PrintStateSnapshot, PrintResult } from '../shared/print'
 import type { PanelBounds, PanelMode, PdvaiState } from '../shared/pdvai'
 
@@ -83,6 +83,16 @@ const api = {
     const listener = (_: Electron.IpcRendererEvent, state: PdvaiState) => cb(state)
     ipcRenderer.on(IPC.PDVAI_STATE_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC.PDVAI_STATE_CHANGED, listener)
+  },
+
+  getUpdateStatus: () =>
+    ipcRenderer.invoke(IPC.UPDATE_GET_STATUS) as Promise<UpdateUiStatus>,
+  installUpdate: () =>
+    ipcRenderer.invoke(IPC.UPDATE_INSTALL) as Promise<{ ok: boolean; error?: string }>,
+  onUpdateStatus: (cb: (status: UpdateUiStatus) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, status: UpdateUiStatus) => cb(status)
+    ipcRenderer.on(IPC.UPDATE_STATUS, listener)
+    return () => ipcRenderer.removeListener(IPC.UPDATE_STATUS, listener)
   }
 }
 

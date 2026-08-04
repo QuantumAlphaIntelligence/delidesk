@@ -13,6 +13,10 @@ extraMetadata:
 extraResources:
   - from: resources/channel.json
     to: channel.json
+# Gera latest.yml + blockmap localmente (upload = CI). URL real vem do channel.json / backend.
+publish:
+  provider: generic
+  url: https://updates.delivai.local/delidesk/${env.CHANNEL}/
 win:
   target:
     - target: nsis
