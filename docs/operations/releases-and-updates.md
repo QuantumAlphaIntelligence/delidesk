@@ -15,6 +15,7 @@
 - O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL`).
 - Feed de update: `{BACKEND}/webhook/public/delidesk-update/{sandbox|prod}`.
 - Instalador **sandbox não vira prod** sozinho (e vice-versa). Cliente em prod **só** recebe releases estáveis.
+- Impressora virtual Windows (captura iFood): **prod** = fila `DeliDesk` porta `19100`; **sandbox** = fila `DeliDesk Test` porta `19101` — no mesmo PC as duas podem coexistir sem conflito.
 
 **Proibido**
 

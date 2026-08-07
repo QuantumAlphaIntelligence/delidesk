@@ -150,11 +150,13 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
         <section className="glass-card rounded-xl px-4 py-3 space-y-2 border-white/15">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold">Impressora virtual DeliDesk</h2>
+              <h2 className="text-sm font-semibold">
+                Impressora virtual {state.virtualPrinter.name || 'DeliDesk'}
+              </h2>
               <p className="text-xs text-delivai-text-gray/70 mt-1">
                 {state.virtualPrinter.installed
                   ? state.virtualPrinter.listening
-                    ? 'Instalada no Windows · aguardando jobs (ex.: iFood)'
+                    ? `Instalada no Windows · porta ${state.virtualPrinter.listenPort} · aguardando jobs (ex.: iFood)`
                     : 'Instalada · listener offline'
                   : 'Não instalada no Spooler — escolha no iFood após instalar'}
               </p>
@@ -187,7 +189,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
                   void withBusy(() => window.delidesk.installVirtualPrinter())
                 }
               >
-                Instalar impressora DeliDesk
+                Instalar {state.virtualPrinter.name || 'DeliDesk'}
               </button>
             )}
           </div>
