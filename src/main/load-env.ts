@@ -2,8 +2,9 @@ import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
 /** Carrega pares KEY=VALUE de um arquivo .env no process.env. */
-function loadEnvFile(filePath: string): void {
+function loadEnvFile(filePath: string, opts?: { override?: boolean }): void {
   if (!existsSync(filePath)) return
+  const override = opts?.override === true
   const text = readFileSync(filePath, 'utf8')
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim()
@@ -18,8 +19,9 @@ function loadEnvFile(filePath: string): void {
     ) {
       value = value.slice(1, -1)
     }
-    // .env.local sobrescreve; não sobrescreve se já veio do shell
-    if (process.env[key] === undefined || filePath.endsWith('.env.local')) {
+    // Em dev, .env / .env.local sobrescrevem channel.json (bake).
+    // Variáveis já definidas no shell só são tocadas com override.
+    if (process.env[key] === undefined || override) {
       process.env[key] = value
     }
   }
@@ -57,8 +59,8 @@ function loadChannelJson(): void {
   }
 }
 
-// Ordem: canal do build → .env → .env.local (dev sobrescreve)
+// Ordem: canal do build → .env → .env.local (dev sobrescreve o bake)
 loadChannelJson()
 const root = process.cwd()
-loadEnvFile(join(root, '.env'))
-loadEnvFile(join(root, '.env.local'))
+loadEnvFile(join(root, '.env'), { override: true })
+loadEnvFile(join(root, '.env.local'), { override: true })

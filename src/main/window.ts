@@ -2,6 +2,14 @@ import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
 
+/** Sandbox: título distinto; prod: só DeliDesk. */
+function resolveWindowTitle(): string {
+  const raw = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
+    .trim()
+    .toLowerCase()
+  return raw === 'prod' ? 'DeliDesk' : 'DeliDesk Test'
+}
+
 function resolveAppIcon(): Electron.NativeImage | undefined {
   const candidates = [
     join(process.resourcesPath, 'icon.png'),
@@ -43,7 +51,7 @@ export function createMainWindow(): BrowserWindow {
     show: true,
     backgroundColor: '#0D3C4F',
     autoHideMenuBar: true,
-    title: 'DeliDesk',
+    title: resolveWindowTitle(),
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

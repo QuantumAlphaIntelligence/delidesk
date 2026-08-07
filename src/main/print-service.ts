@@ -232,10 +232,22 @@ export function setDefaultPrinter(name: string): PrintStateSnapshot {
 }
 
 async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
-  const preview =
-    bytes.length > 0
-      ? previewFromEscPos(bytes).slice(0, 400) || `Job virtual (${bytes.length} bytes)`
-      : 'Job virtual vazio'
+  console.info('[virtual-printer] handle job', {
+    bytes: bytes.length,
+    captureFlag: platformVirtualCaptureEnabled,
+    hasSession: Boolean(getSession()?.accessToken)
+  })
+  let preview: string
+  try {
+    preview =
+      bytes.length > 0
+        ? previewFromEscPos(bytes).slice(0, 400) || `Job virtual (${bytes.length} bytes)`
+        : 'Job virtual vazio'
+  } catch (err) {
+    console.warn('[virtual-printer] preview decode failed', err)
+    preview = `Job virtual (${bytes.length} bytes)`
+  }
+  console.info('[virtual-printer] preview', preview.slice(0, 160).replace(/\s+/g, ' '))
   const contentBase64 = bytes.toString('base64')
   const job: PrintJob = {
     id: newJobId(),
@@ -256,6 +268,7 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
   if (bytes.length === 0) {
     lastCaptureStatus = 'idle'
     lastCaptureMessage = 'Job virtual vazio'
+    console.warn('[virtual-printer] skip: empty job')
     emit()
     return
   }
@@ -263,6 +276,11 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
   if (!session || isMockSession(session) || authMock()) {
     lastCaptureStatus = 'idle'
     lastCaptureMessage = 'Sem sessão real — captura IA ignorada'
+    console.warn('[virtual-printer] skip: no real session', {
+      hasSession: Boolean(session),
+      mockSession: session ? isMockSession(session) : null,
+      authMock: authMock()
+    })
     emit()
     return
   }
@@ -270,6 +288,7 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
     lastCaptureStatus = 'idle'
     lastCaptureMessage =
       'Captura iFood desligada pela DelivAI (Dev) — impressora virtual não envia cupom'
+    console.warn('[virtual-printer] skip: virtual_capture disabled')
     emit()
     return
   }
@@ -278,12 +297,17 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
   emit()
   try {
     const sha = createHash('sha256').update(bytes).digest('hex')
+    console.info('[virtual-printer] posting virtual-capture', {
+      bytes: bytes.length,
+      sha: sha.slice(0, 12)
+    })
     const result = await postVirtualCapture({
       contentBase64,
       byteLength: bytes.length,
       contentSha256: sha,
       machineLabel: `${os.hostname()} · DeliDesk`
     })
+    console.info('[virtual-printer] capture result', result)
     if (
       result.error === 'delidesk_virtual_capture_disabled' ||
       result.error === 'delidesk_printer_disabled'
@@ -324,12 +348,17 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
     if (err instanceof AgentAuthError) {
       lastCaptureStatus = 'error'
       lastCaptureMessage = 'Sessão expirada — entre de novo no DeliDesk'
+      console.warn('[virtual-printer] capture auth failed', err.message)
     } else {
       lastCaptureStatus = 'error'
       lastCaptureMessage = 'Não foi possível enviar o cupom. Tente de novo.'
       console.warn('[virtual-printer] capture upload failed', err)
     }
   }
+  console.info('[virtual-printer] capture status', {
+    status: lastCaptureStatus,
+    message: lastCaptureMessage
+  })
   emit()
 }
 
