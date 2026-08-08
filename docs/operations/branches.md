@@ -117,11 +117,24 @@ Canônica cruzada: `backend-delivai/docs/operations/branches.md` § Fecho de fre
 
 ---
 
-## Estado atual (jul/2026)
+## Estado atual (ago/2026)
 
 | Repo | Branch de melhoria | Tronco sandbox | Tronco prod |
 |------|--------------------|----------------|-------------|
-| `delidesk` | *(fecho — limpar feature após sync)* | `develop` → instalador sandbox | `main` → instalador prod |
+| `delidesk` | `feature/virtual-printer-sandbox-name` (fila `DeliDesk Test` / porta `19101`) | `develop` → instalador sandbox | `main` → instalador prod |
 
-> Detalhe de canais, releases e update seguro: [`releases-and-updates.md`](releases-and-updates.md).
+> Detalhe de canais, releases, update seguro e **como puxar no notebook para testar a fila**: [`releases-and-updates.md`](releases-and-updates.md) §7.
+
+### Atalho — testar sandbox no notebook (frente atual)
+
+```powershell
+cd delidesk
+git fetch origin
+git checkout feature/virtual-printer-sandbox-name
+git pull
+npm run bake:sandbox
+npm run dev
+```
+
+Esperado: app canal **sandbox**, impressora virtual **`DeliDesk Test`** (`19101`). Não usar o DeliDesk prod do sushi neste PC durante o teste.
 

@@ -3,11 +3,21 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 
 /** Sandbox: título distinto; prod: só DeliDesk. */
-function resolveWindowTitle(): string {
+export function resolveWindowTitle(): string {
   const raw = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
     .trim()
     .toLowerCase()
   return raw === 'prod' ? 'DeliDesk' : 'DeliDesk Test'
+}
+
+/** Mantém o título do canal; o painel embutido (document.title) não pode virar “DeliDesk” em sandbox. */
+export function lockWindowTitle(win: BrowserWindow): void {
+  const title = resolveWindowTitle()
+  win.setTitle(title)
+  win.on('page-title-updated', (e) => {
+    e.preventDefault()
+    if (!win.isDestroyed()) win.setTitle(title)
+  })
 }
 
 function resolveAppIcon(): Electron.NativeImage | undefined {
@@ -60,6 +70,7 @@ export function createMainWindow(): BrowserWindow {
       sandbox: false
     }
   })
+  lockWindowTitle(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()

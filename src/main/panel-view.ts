@@ -1,12 +1,21 @@
 import { BrowserView, shell } from 'electron'
-import { getMainWindow } from './window'
-import { getPanelModeUrl, getPanelOrigin, getPanelUrl } from '../shared/config'
+import { getMainWindow, resolveWindowTitle } from './window'
+import { getPanelModeUrl, getPanelOrigin, getPanelPathUrl, getPanelUrl } from '../shared/config'
 import { getDelivaiSession } from './delivai-session'
 import type { PanelBounds, PanelMode } from '../shared/pdvai'
 import { IPC } from '../shared/ipc'
-import { patchSessionBranding } from './auth-store'
+import { getSession, isMockSession, patchSessionBranding } from './auth-store'
 import { sanitizeCompanyName, sanitizeLogoUrl } from '../shared/branding'
 import { resolveLogoForShell } from './logo-cache'
+import {
+  fetchPanelHydrate,
+  fetchPanelSessionByCode,
+  type PanelSnapshot
+} from './agent-api'
+import {
+  loadPanelSnapshot,
+  savePanelSnapshot
+} from './panel-snapshot-store'
 
 let view: BrowserView | null = null
 let visible = false
@@ -89,15 +98,27 @@ function ensureView(): BrowserView {
       void view?.webContents.executeJavaScript(EMBED_BOOTSTRAP).catch(() => undefined)
       // Após o painel hidratar customer, nome/logo vão para localStorage.
       void syncBrandingFromPanel().catch(() => undefined)
+      const win = getMainWindow()
+      if (win && !win.isDestroyed()) win.setTitle(resolveWindowTitle())
+    })
+    // BrowserView também dispara page-title-updated na janela pai (virava “DeliDesk”/Pedidos).
+    view.webContents.on('page-title-updated', (e) => {
+      e.preventDefault()
+      const win = getMainWindow()
+      if (win && !win.isDestroyed()) win.setTitle(resolveWindowTitle())
     })
   }
   return view
 }
 
+/** CNPJ interno DelivAI — espelho de front `DELIVAI_INTERNAL_CNPJ`. */
+const DELIVAI_INTERNAL_CNPJ = '99999999000199'
+
 type PanelBranding = {
   name?: string
   logoUrl?: string
   cnpj?: string
+  shellRole?: 'store' | 'dev'
 }
 
 async function readPanelBranding(v: BrowserView): Promise<PanelBranding> {
@@ -111,7 +132,9 @@ async function readPanelBranding(v: BrowserView): Promise<PanelBranding> {
           const cnpj = (brand.cnpj || u.cnpj || localStorage.getItem('cnpj') || '')
             .toString().replace(/\\D/g, '');
           const logoUrl = (brand.logoUrl || '').toString().trim();
-          return { name, cnpj, logoUrl };
+          const isCollab = u.isCollaborator === true;
+          const shellRole = (isCollab && cnpj === '${DELIVAI_INTERNAL_CNPJ}') ? 'dev' : 'store';
+          return { name, cnpj, logoUrl, shellRole };
         } catch (e) {
           return {};
         }
@@ -123,7 +146,7 @@ async function readPanelBranding(v: BrowserView): Promise<PanelBranding> {
   }
 }
 
-/** Lê nome/logo/CNPJ do BrowserView e atualiza a sessão Electron (sem UUID). */
+/** Lê nome/logo/CNPJ/papel do BrowserView e atualiza a sessão Electron (sem UUID). */
 export async function syncBrandingFromPanel(): Promise<void> {
   if (!view) return
   const brand = await readPanelBranding(view)
@@ -131,12 +154,14 @@ export async function syncBrandingFromPanel(): Promise<void> {
   const remoteLogo = sanitizeLogoUrl(brand.logoUrl)
   const logo = remoteLogo ? await resolveLogoForShell(remoteLogo) : undefined
   const cnpj = brand.cnpj?.replace(/\D/g, '')
-  if (!name && !logo && !remoteLogo && !(cnpj && cnpj.length === 14)) return
+  const shellRole = brand.shellRole === 'dev' || brand.shellRole === 'store' ? brand.shellRole : undefined
+  if (!name && !logo && !remoteLogo && !(cnpj && cnpj.length === 14) && !shellRole) return
   const next = patchSessionBranding({
     companyName: name,
     // data URL ok; se o download falhou, null limpa URL remota quebrada.
     companyLogoUrl: remoteLogo ? logo ?? null : undefined,
-    companyCnpj: cnpj
+    companyCnpj: cnpj,
+    shellRole
   })
   if (next) {
     getMainWindow()?.webContents.send(IPC.AUTH_SESSION_CHANGED, next)
@@ -164,8 +189,14 @@ function isAbortError(err: unknown): boolean {
 
 /** loadURL com catch: redirect/SSO aborta a promise com ERR_ABORTED (benigno). */
 async function safeLoadURL(v: BrowserView, url: string): Promise<void> {
+  const LOAD_MS = 10_000
   try {
-    await v.webContents.loadURL(url)
+    await Promise.race([
+      v.webContents.loadURL(url),
+      new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error(`loadURL timeout ${LOAD_MS}ms`)), LOAD_MS)
+      })
+    ])
   } catch (err) {
     if (isAbortError(err)) {
       console.info('[panel] load aborted (ok)', url.slice(0, 80))
@@ -197,62 +228,207 @@ function alreadyOn(v: BrowserView, target: string): boolean {
   }
 }
 
-/**
- * Após oauth/token: carrega /delidesk-sso na partition do painel
- * para gravar localStorage.delivai_user (mesmo sem a aba visível).
- */
-export async function seedPanelSession(panelSsoCode: string): Promise<void> {
-  const code = panelSsoCode.trim()
-  if (!code) return
+function panelDestPath(snap: PanelSnapshot): string {
+  const u = snap.user
+  const cnpj = String(u.cnpj || '').replace(/\D/g, '')
+  const isCollab = u.isCollaborator === true || u.is_collaborator === true
+  const internal = '99999999000199'
+  if (isCollab && cnpj === internal) return '/dev'
+  return '/dashboard/orders'
+}
 
-  const v = ensureView()
-  const ssoUrl = `${getPanelOrigin()}/delidesk-sso?code=${encodeURIComponent(code)}`
-  currentMode = 'orders'
-  seeding = true
+async function injectPanelSnapshot(v: BrowserView, snap: PanelSnapshot): Promise<void> {
+  const payload = JSON.stringify({
+    user: snap.user,
+    license_modules: snap.licenseModules ?? {},
+    company_name: snap.companyName ?? '',
+    company_logo_url: snap.companyLogoUrl ?? '',
+    embed_key: 'delivai_delidesk_embed'
+  })
+  await v.webContents.executeJavaScript(
+    `(() => {
+      const d = ${payload};
+      try {
+        localStorage.setItem('delivai_user', JSON.stringify(d.user));
+        const cnpj = String(d.user.cnpj || '').replace(/\\D/g, '');
+        if (cnpj) localStorage.setItem('cnpj', cnpj);
+        localStorage.setItem('license_modules', JSON.stringify(d.license_modules || {}));
+        localStorage.setItem(d.embed_key, '1');
+        const brand = {
+          name: (d.company_name || d.user.name || '').toString().trim() || undefined,
+          logoUrl: (d.company_logo_url || '').toString().trim() || undefined,
+          cnpj: cnpj || undefined
+        };
+        if (brand.name || brand.logoUrl || brand.cnpj) {
+          localStorage.setItem('delidesk_branding', JSON.stringify(brand));
+        }
+        document.documentElement.classList.add('delidesk-embed');
+      } catch (e) {}
+      true;
+    })()`,
+    true
+  )
+}
 
-  console.info('[panel] seeding SSO session')
+function waitForLoad(v: BrowserView, timeoutMs = 12_000): Promise<void> {
+  return new Promise((resolve) => {
+    let done = false
+    const finish = (): void => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      v.webContents.removeListener('did-finish-load', onLoad)
+      v.webContents.removeListener('did-fail-load', onFail)
+      resolve()
+    }
+    const onLoad = (): void => finish()
+    const onFail = (): void => finish()
+    const timer = setTimeout(finish, timeoutMs)
+    v.webContents.once('did-finish-load', onLoad)
+    v.webContents.once('did-fail-load', onFail)
+  })
+}
+
+async function panelHasUser(v: BrowserView): Promise<boolean> {
   try {
-    await safeLoadURL(v, ssoUrl)
+    const url = v.webContents.getURL()
+    if (!url || url === 'about:blank' || !url.startsWith('http')) return false
+    return Boolean(
+      await v.webContents.executeJavaScript(
+        `(() => { try { const u = localStorage.getItem('delivai_user'); return !!(u && u.length > 8); } catch (e) { return false; } })()`,
+        true
+      )
+    )
+  } catch {
+    return false
+  }
+}
 
-    // Espera redirect para /dashboard (window.location.replace no front)
-    await new Promise<void>((resolve) => {
-      let settled = false
-      const finish = (): void => {
-        if (settled) return
-        settled = true
-        clearTimeout(timer)
-        v.webContents.removeListener('did-navigate', onNav)
-        v.webContents.removeListener('did-navigate-in-page', onNav)
-        resolve()
-      }
-      const onNav = (_e: Electron.Event, url: string): void => {
-        if (url.includes('/dashboard')) finish()
-      }
-      const timer = setTimeout(finish, 8_000)
-      v.webContents.on('did-navigate', onNav)
-      v.webContents.on('did-navigate-in-page', onNav)
-      if (alreadyOn(v, getPanelUrl())) finish()
+/** Fallback: monta snapshot mínimo a partir da sessão do agente (shell já logado). */
+function snapshotFromAgentSession(): PanelSnapshot | null {
+  const s = getSession()
+  if (!s?.accessToken || isMockSession(s)) return null
+  const cnpj = (s.companyCnpj || '').replace(/\D/g, '')
+  const name = (s.companyName || 'Loja').trim() || 'Loja'
+  const isDev = s.shellRole === 'dev'
+  return {
+    user: {
+      id: s.companyId || cnpj || s.agentId || 'delidesk',
+      name,
+      cnpj: cnpj || (isDev ? '99999999000199' : ''),
+      email: '',
+      token: `local_token_${cnpj || s.agentId || 'desk'}`,
+      isCollaborator: isDev
+    },
+    licenseModules: {
+      mod_atendimento: true,
+      mod_motoboy: true,
+      mod_gerente: true,
+      mod_agendamento: true,
+      mod_financeiro: true
+    },
+    companyName: name,
+    companyLogoUrl: s.companyLogoUrl ?? null
+  }
+}
+
+/**
+ * Injeta no origin do painel (nunca about:blank) e só então navega ao destino.
+ * localStorage é por origin — inject em about:blank não chega no localhost:3000.
+ */
+async function applyPanelSnapshot(snap: PanelSnapshot): Promise<void> {
+  const v = ensureView()
+  const destPath = panelDestPath(snap)
+  currentMode = destPath.startsWith('/dev') ? 'dev-home' : 'orders'
+  const dest = getPanelPathUrl(destPath)
+  const boot = `${getPanelOrigin()}/delidesk-sso?embed=delidesk&boot=1`
+  seeding = true
+  try {
+    savePanelSnapshot(snap)
+    await safeLoadURL(v, boot)
+    await injectPanelSnapshot(v, snap)
+    // Navega no mesmo origin já com delivai_user gravado (AuthContext lê no boot).
+    await v.webContents.executeJavaScript(
+      `window.location.replace(${JSON.stringify(dest)}); true;`,
+      true
+    )
+    await waitForLoad(v)
+    if (!(await panelHasUser(v))) {
+      console.warn('[panel] user missing after navigate — re-inject + reload')
+      await injectPanelSnapshot(v, snap)
+      v.webContents.reload()
+      await waitForLoad(v)
+    }
+    console.info('[panel] snapshot applied', {
+      dest: destPath,
+      hasUser: await panelHasUser(v)
     })
   } finally {
     contentLoaded = true
     seeding = false
   }
-
   void hydrateBrandingAfterSeed().catch((err) => {
     console.warn('[panel] branding hydrate failed', err)
   })
 }
+
+/**
+ * Após oauth/poll: troca o code no main (fetch) e injeta localStorage —
+ * não depende do SPA /delidesk-sso no BrowserView (que travava o login).
+ */
+export async function seedPanelSession(panelSsoCode: string): Promise<void> {
+  const code = panelSsoCode.trim()
+  if (!code) return
+  console.info('[panel] seeding SSO via main fetch')
+  try {
+    const snap = await fetchPanelSessionByCode(code)
+    await applyPanelSnapshot(snap)
+  } catch (err) {
+    console.warn('[panel] SSO code exchange failed, trying hydrate/cache', err)
+    await ensurePanelHydrated()
+  }
+}
+
+/**
+ * Garante localStorage.delivai_user no BrowserView:
+ * cache local → API panel-hydrate → snapshot mínimo da sessão do agente.
+ */
+export async function ensurePanelHydrated(): Promise<boolean> {
+  const v = ensureView()
+  if (await panelHasUser(v)) return true
+
+  const cached = loadPanelSnapshot()
+  if (cached) {
+    console.info('[panel] hydrate from local cache (offline-ready)')
+    await applyPanelSnapshot(cached)
+    return await panelHasUser(v)
+  }
+
+  try {
+    console.info('[panel] hydrate from API')
+    const snap = await fetchPanelHydrate()
+    await applyPanelSnapshot(snap)
+    return await panelHasUser(v)
+  } catch (err) {
+    console.warn('[panel] hydrate API failed', err)
+  }
+
+  const fallback = snapshotFromAgentSession()
+  if (fallback) {
+    console.info('[panel] hydrate from agent session fallback')
+    await applyPanelSnapshot(fallback)
+    return await panelHasUser(v)
+  }
+  return false
+}
+
+let showPanelHydrateInFlight: Promise<void> | null = null
 
 export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
   const win = getMainWindow()
   if (!win) return
 
   const v = ensureView()
-  const target = urlFor(mode)
-  const needLoad =
-    !seeding &&
-    (!contentLoaded || currentMode !== mode) &&
-    !alreadyOn(v, target)
   currentMode = mode
 
   if (!win.getBrowserViews().includes(v)) {
@@ -266,15 +442,30 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
     height: Math.max(100, Math.round(bounds.height))
   })
   v.setAutoResize({ width: true, height: true })
-
-  if (needLoad) {
-    void safeLoadURL(v, target).then(() => {
-      contentLoaded = true
-    })
-  } else {
-    void v.webContents.executeJavaScript(EMBED_BOOTSTRAP).catch(() => undefined)
-  }
   visible = true
+
+  // Nunca abrir Pedidos/Chat sem sessão do painel — evita gate “Conecte pelo DeliDesk”.
+  if (seeding) return
+  if (!showPanelHydrateInFlight) {
+    showPanelHydrateInFlight = (async () => {
+      try {
+        const ok = await ensurePanelHydrated()
+        if (!ok) {
+          console.warn('[panel] showPanel: sem sessão do painel')
+          return
+        }
+        const target = urlFor(mode)
+        if (!alreadyOn(v, target)) {
+          await safeLoadURL(v, target)
+        } else {
+          void v.webContents.executeJavaScript(EMBED_BOOTSTRAP).catch(() => undefined)
+        }
+        contentLoaded = true
+      } finally {
+        showPanelHydrateInFlight = null
+      }
+    })()
+  }
 }
 
 export function setPanelBounds(bounds: PanelBounds): void {
@@ -297,9 +488,21 @@ export function hidePanel(): void {
 
 export function reloadPanel(): void {
   if (!view) return
-  void safeLoadURL(view, urlFor(currentMode)).then(() => {
+  void (async () => {
+    const ok = await ensurePanelHydrated()
+    if (!ok) {
+      console.warn('[panel] reload: sem sessão do painel')
+      return
+    }
+    // Reaplica snapshot (garante localStorage) e recarrega a rota atual.
+    const cached = loadPanelSnapshot() || snapshotFromAgentSession()
+    if (cached) {
+      await applyPanelSnapshot(cached)
+      return
+    }
+    await safeLoadURL(view!, urlFor(currentMode))
     contentLoaded = true
-  })
+  })()
 }
 
 export function openPanelInBrowser(mode: PanelMode): void {
