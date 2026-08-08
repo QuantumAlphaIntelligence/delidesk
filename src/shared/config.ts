@@ -97,6 +97,32 @@ export function getPanelModeUrl(mode: string): string {
       return getPanelPathUrl('/dashboard/license')
     case 'clients':
       return getPanelPathUrl('/dashboard/clientes')
+    case 'dev-home':
+      return getPanelPathUrl('/dev')
+    case 'dev-licenses':
+      return getPanelPathUrl('/dev/licenses')
+    case 'dev-contracts':
+      return getPanelPathUrl('/dev/contracts')
+    case 'dev-evolution':
+      return getPanelPathUrl('/dev/evolution')
+    case 'dev-bot':
+      return getPanelPathUrl('/dev/bot')
+    case 'dev-delidesk':
+      return getPanelPathUrl('/dev/delidesk')
+    case 'dev-companies':
+      return getPanelPathUrl('/dev/cardapio')
+    case 'dev-prompts':
+      return getPanelPathUrl('/dev/prompts')
+    case 'dev-clients':
+      return getPanelPathUrl('/dev/clientes')
+    case 'dev-database':
+      return getPanelPathUrl('/dev/database')
+    case 'dev-logs':
+      return getPanelPathUrl('/dev/logs')
+    case 'dev-observability':
+      return getPanelPathUrl('/dev/observability')
+    case 'dev-permissoes':
+      return getPanelPathUrl('/dev/permissoes')
     case 'orders':
     default:
       return getPanelUrl()

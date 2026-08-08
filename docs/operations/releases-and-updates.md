@@ -15,6 +15,7 @@
 - O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL`).
 - Feed de update: `{BACKEND}/webhook/public/delidesk-update/{sandbox|prod}`.
 - Instalador **sandbox não vira prod** sozinho (e vice-versa). Cliente em prod **só** recebe releases estáveis.
+- Impressora virtual Windows (captura iFood): **prod** = fila `DeliDesk` porta `19100`; **sandbox** = fila `DeliDesk Test` porta `19101` — no mesmo PC as duas podem coexistir sem conflito.
 
 **Proibido**
 
@@ -119,7 +120,69 @@ Sandbox: idem com `develop` + channel `sandbox` + prerelease.
 
 ---
 
-## 7. Falhas comuns
+## 7. Notebook / PC de teste — puxar sandbox e testar fila `DeliDesk Test`
+
+Use quando o PC já tem DeliDesk **prod** (ex.: sushi em produção) e você precisa homologar captura/fila **sem** misturar com a loja.
+
+### O que muda com a versão nova
+
+| | Prod (loja) | Sandbox (teste) |
+|--|-------------|-----------------|
+| Canal assado | `prod` | `sandbox` |
+| Fila impressora virtual | `DeliDesk` | **`DeliDesk Test`** |
+| Porta virtual | `19100` | **`19101`** |
+| Backend / painel | API prod | API **test** + front localhost (fase de testes) |
+| Título da janela | DeliDesk | DeliDesk (sandbox / Test) |
+
+No mesmo Windows as duas filas **podem coexistir**. O iFood de teste deve apontar para **`DeliDesk Test`**, não para `DeliDesk`.
+
+**Apps também:** sandbox e prod usam `userData` separados (`%APPDATA%/delidesk-sandbox` vs `%APPDATA%/delidesk`). Assim `npm run dev` / Setup-sandbox **não** rouba o single-instance lock do `.exe` prod (e vice-versa). Se o prod “não abre” com o teste rodando, atualize o desk com esse isolamento — ou feche o sandbox antes.
+
+### Opção A — código na feature (dev local, recomendado na frente atual)
+
+Branch da frente (ex.: `feature/virtual-printer-sandbox-name`). **Não** usar o instalador prod do sushi neste PC enquanto testar.
+
+```powershell
+cd delidesk
+git fetch origin
+git checkout feature/virtual-printer-sandbox-name
+git pull
+npm install
+npm run bake:sandbox
+npm run dev
+```
+
+- Confirme título / canal sandbox e que a impressora virtual criada é **`DeliDesk Test`** (`19101`).
+- Front DelivAI: `npm start` no `front-delivai` (localhost) apontando API test.
+- Antes de abrir captura no notebook: no painel (Impressão / DeliDesk) → **Limpar fila** se houver jobs velhos de outro PC.
+
+### Opção B — instalador sandbox (sem Node)
+
+1. Painel Dev / download: `channel=sandbox` → `DeliDesk-Setup-sandbox-*.exe` (prerelease).
+2. Instalar **ao lado** ou em outro atalho — **não** substituir o atalho prod da loja sem querer.
+3. Abrir só o atalho sandbox; conferir fila **`DeliDesk Test`**.
+4. Se o notebook ainda estiver na versão antiga (antes da separação de ambientes): desinstalar/atualizar com o `.exe` sandbox novo; o prod do sushi continua no canal `prod` noutro PC (ou outro instalador).
+
+### Checklist rápido antes do turno de teste iFood
+
+```
+[ ] DeliDesk sandbox (dev ou Setup-sandbox) aberto — não o prod do sushi
+[ ] Fila Windows = DeliDesk Test (porta 19101)
+[ ] Front localhost + backend test
+[ ] Fila limpa no painel se o PC da impressora ficou offline
+[ ] iFood / driver apontando para DeliDesk Test
+[ ] Avisar no grupo/loja: homologação em andamento neste PC
+```
+
+### Depois do teste
+
+- Fechar o DeliDesk sandbox.
+- Voltar ao atalho **prod** só na loja que opera o sushi (canal `prod` / fila `DeliDesk`).
+- Não publicar release **prod** no meio dos testes.
+
+---
+
+## 8. Falhas comuns
 
 | Sintoma | Causa típica | Ação |
 |---------|--------------|------|
@@ -128,10 +191,12 @@ Sandbox: idem com `develop` + channel `sandbox` + prerelease.
 | App novo + API velha | Desk main antes do BE main | Reverter ordem: BE primeiro |
 | Reiniciou no pico | Operador clicou “Instalar agora” | Orientar usar “Depois” até fim do turno |
 | Merge main sem `.exe` novo | Esqueceram Actions | Disparar release |
+| Cupom iFood some / fila errada | Driver apontando `DeliDesk` (prod) enquanto o app de teste escuta `DeliDesk Test` | Trocar impressora no iFood para **DeliDesk Test**; limpar fila no painel |
+| Notebook ainda sem fila Test | Instalador antigo (pré-separação de canais) | Puxar branch + `bake:sandbox` / `npm run dev` **ou** instalar `Setup-sandbox` novo (§7) |
 
 ---
 
-## 8. Referência de código
+## 9. Referência de código
 
 | Peça | Path |
 |------|------|
@@ -140,3 +205,4 @@ Sandbox: idem com `develop` + channel `sandbox` + prerelease.
 | Toast | `src/renderer/src/components/UpdateToast.tsx` |
 | Workflow | `.github/workflows/release-windows.yml` |
 | Feed / download BE | `DelideskReleaseHandler` / `DelideskReleaseService` (backend) |
+| Fila virtual sandbox vs prod | impressora `DeliDesk`/`DeliDesk Test` + portas `19100`/`19101` (main process) |

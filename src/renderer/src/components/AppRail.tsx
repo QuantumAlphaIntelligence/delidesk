@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import type { ShellRole } from '@shared/ipc'
 import { DeliDeskMark } from './DeliDeskMark'
 
 export type AppNavId =
@@ -12,6 +13,19 @@ export type AppNavId =
   | 'company'
   | 'license'
   | 'clients'
+  | 'dev-home'
+  | 'dev-licenses'
+  | 'dev-contracts'
+  | 'dev-evolution'
+  | 'dev-bot'
+  | 'dev-delidesk'
+  | 'dev-companies'
+  | 'dev-prompts'
+  | 'dev-clients'
+  | 'dev-database'
+  | 'dev-logs'
+  | 'dev-observability'
+  | 'dev-permissoes'
 
 type NavItem = {
   id: AppNavId
@@ -22,6 +36,8 @@ type NavItem = {
 
 type Props = {
   active: AppNavId
+  /** loja = Pedidos…; dev = painel interno DelivAI */
+  shellRole?: ShellRole
   companyLabel?: string
   /** CNPJ já mascarado (mesmo padrão do chip da sidebar no front). */
   companyDocLabel?: string
@@ -183,6 +199,109 @@ const CONFIG_FOOTER: NavItem[] = [
   }
 ]
 
+/** Rail da equipe DelivAI (espelha /dev — sem Pedidos/Loja). */
+const DEV_MAIN: NavItem[] = [
+  {
+    id: 'dev-home',
+    label: 'Início',
+    hint: 'Painel de controle',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1v-9.5Z" strokeLinejoin="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'dev-licenses',
+    label: 'Licenças',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="4" y="5" width="16" height="14" rx="2" />
+          <path d="M8 9h8M8 12h5M8 15h6" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'dev-evolution',
+    label: 'Evolution',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="4" width="18" height="6" rx="1.5" />
+          <rect x="3" y="14" width="18" height="6" rx="1.5" />
+          <path d="M7 7h.01M7 17h.01" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'dev-bot',
+    label: 'Bot',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="5" y="8" width="14" height="10" rx="2" />
+          <path d="M12 4v4M9 13h.01M15 13h.01M9 16h6" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'dev-delidesk',
+    label: 'DeliDesk',
+    hint: 'Features',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <rect x="3" y="4" width="18" height="12" rx="2" />
+          <path d="M8 20h8M12 16v4" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'dev-companies',
+    label: 'Empresas',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 20V6l8-3 8 3v14" strokeLinejoin="round" />
+          <path d="M9 20v-6h6v6" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'dev-database',
+    label: 'Banco',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <ellipse cx="12" cy="6" rx="7" ry="3" />
+          <path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'dev-logs',
+    label: 'Logs',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M5 6h14M5 12h10M5 18h12" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  }
+]
+
+const DEV_FOOTER: NavItem[] = [...CONFIG]
+
 function NavButton({
   item,
   active,
@@ -225,6 +344,7 @@ function NavButton({
  */
 export function AppRail({
   active,
+  shellRole = 'store',
   companyLabel,
   companyDocLabel,
   companyLogoUrl,
@@ -239,9 +359,14 @@ export function AppRail({
     setLogoFailed(false)
     setLogoReady(false)
   }, [companyLogoUrl])
-  const showCompanyLogo = Boolean(companyLogoUrl && !logoFailed && logoReady)
-  const storeTitle = (companyLabel || '').trim() || 'Loja'
-  const storeSub = (companyDocLabel || '').trim() || 'DeliDesk'
+  const isDevShell = shellRole === 'dev'
+  const showCompanyLogo = Boolean(!isDevShell && companyLogoUrl && !logoFailed && logoReady)
+  const storeTitle = isDevShell
+    ? 'Equipe DelivAI'
+    : (companyLabel || '').trim() || 'Loja'
+  const storeSub = isDevShell
+    ? 'Painel interno'
+    : (companyDocLabel || '').trim() || 'DeliDesk'
 
   const initialMark = (
     <div
@@ -312,55 +437,90 @@ export function AppRail({
       </div>
 
       <nav className="rail-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overflow-x-hidden px-1.5 py-1.5">
-        {MAIN.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            active={active === item.id}
-            expanded={expanded}
-            onClick={() => onNavigate(item.id)}
-          />
-        ))}
-
-        {expanded ? (
-          <div className="px-2 pb-1 pt-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
-              Loja
-            </p>
-            <div className="mt-1.5 h-px bg-white/10" />
-          </div>
-        ) : null}
-
-        {LOJA.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            active={active === item.id}
-            expanded={expanded}
-            onClick={() => onNavigate(item.id)}
-          />
-        ))}
-
-        {expanded ? (
-          <div className="px-2 pb-1 pt-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
-              Configuração
-            </p>
-            <div className="mt-1.5 h-px bg-white/10" />
-          </div>
+        {isDevShell ? (
+          <>
+            {DEV_MAIN.map((item) => (
+              <NavButton
+                key={item.id}
+                item={item}
+                active={active === item.id}
+                expanded={expanded}
+                onClick={() => onNavigate(item.id)}
+              />
+            ))}
+            {expanded ? (
+              <div className="px-2 pb-1 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
+                  Máquina
+                </p>
+                <div className="mt-1.5 h-px bg-white/10" />
+              </div>
+            ) : (
+              <div className="mx-2 my-1 h-px bg-white/10" />
+            )}
+            {DEV_FOOTER.map((item) => (
+              <NavButton
+                key={item.id}
+                item={item}
+                active={active === item.id}
+                expanded={expanded}
+                onClick={() => onNavigate(item.id)}
+              />
+            ))}
+          </>
         ) : (
-          <div className="mx-2 my-1 h-px bg-white/10" />
-        )}
+          <>
+            {MAIN.map((item) => (
+              <NavButton
+                key={item.id}
+                item={item}
+                active={active === item.id}
+                expanded={expanded}
+                onClick={() => onNavigate(item.id)}
+              />
+            ))}
 
-        {CONFIG_FOOTER.map((item) => (
-          <NavButton
-            key={item.id}
-            item={item}
-            active={active === item.id}
-            expanded={expanded}
-            onClick={() => onNavigate(item.id)}
-          />
-        ))}
+            {expanded ? (
+              <div className="px-2 pb-1 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
+                  Loja
+                </p>
+                <div className="mt-1.5 h-px bg-white/10" />
+              </div>
+            ) : null}
+
+            {LOJA.map((item) => (
+              <NavButton
+                key={item.id}
+                item={item}
+                active={active === item.id}
+                expanded={expanded}
+                onClick={() => onNavigate(item.id)}
+              />
+            ))}
+
+            {expanded ? (
+              <div className="px-2 pb-1 pt-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
+                  Configuração
+                </p>
+                <div className="mt-1.5 h-px bg-white/10" />
+              </div>
+            ) : (
+              <div className="mx-2 my-1 h-px bg-white/10" />
+            )}
+
+            {CONFIG_FOOTER.map((item) => (
+              <NavButton
+                key={item.id}
+                item={item}
+                active={active === item.id}
+                expanded={expanded}
+                onClick={() => onNavigate(item.id)}
+              />
+            ))}
+          </>
+        )}
       </nav>
 
       <div className="flex flex-col gap-1 border-t border-white/10 px-1.5 pb-3 pt-2">

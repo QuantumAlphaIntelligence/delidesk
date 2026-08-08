@@ -49,6 +49,10 @@ export type PrintStateSnapshot = {
     supported: boolean
     installed: boolean
     listening: boolean
+    /** Nome da fila Windows deste canal (prod: DeliDesk; sandbox: DeliDesk Test). */
+    name: string
+    channel: 'prod' | 'sandbox'
+    listenPort: number
     lastError?: string
     lastForwardAt?: number
     /** Último envio à IA / captura. */

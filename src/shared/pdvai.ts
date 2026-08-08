@@ -7,6 +7,19 @@ export type PanelMode =
   | 'company'
   | 'license'
   | 'clients'
+  | 'dev-home'
+  | 'dev-licenses'
+  | 'dev-contracts'
+  | 'dev-evolution'
+  | 'dev-bot'
+  | 'dev-delidesk'
+  | 'dev-companies'
+  | 'dev-prompts'
+  | 'dev-clients'
+  | 'dev-database'
+  | 'dev-logs'
+  | 'dev-observability'
+  | 'dev-permissoes'
 
 export type PanelBounds = {
   x: number

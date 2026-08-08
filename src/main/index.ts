@@ -8,6 +8,23 @@ import {
   net
 } from 'electron'
 import { join, resolve } from 'path'
+
+/**
+ * Isola perfil Electron por canal **antes** do single-instance lock.
+ * Prod mantém `%APPDATA%/delidesk` (sessões das lojas).
+ * Sandbox/dev usa `%APPDATA%/delidesk-sandbox` — senão `npm run dev` impede abrir o .exe prod.
+ */
+function applyChannelUserDataIsolation(): void {
+  const channel = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
+    .trim()
+    .toLowerCase()
+  if (channel === 'prod') return
+  const isolated = join(app.getPath('appData'), 'delidesk-sandbox')
+  app.setPath('userData', isolated)
+  console.info('[channel] userData isolated', { channel, userData: isolated })
+}
+
+applyChannelUserDataIsolation()
 import os from 'os'
 import { IPC, PROTOCOL } from '../shared/ipc'
 import {
@@ -182,12 +199,11 @@ async function runAuthPollTick(generation: number): Promise<void> {
       agentId: result.session.agentId
     })
     win?.webContents.send(IPC.AUTH_SESSION_CHANGED, result.session)
+    // Sessão do agente já está OK — SSO do painel não pode travar a UI.
     if (result.panelSsoCode) {
-      try {
-        await seedPanelSession(result.panelSsoCode)
-      } catch (seedErr) {
+      void seedPanelSession(result.panelSsoCode).catch((seedErr) => {
         console.warn('[auth] panel SSO seed failed', seedErr)
-      }
+      })
     }
     await onRealSessionReady()
     clearDemoPdvai()
@@ -284,6 +300,7 @@ function registerIpc(): void {
     stopMockSse()
     clearSession()
     clearDemoPdvai()
+    void import('./panel-snapshot-store').then((m) => m.clearPanelSnapshot())
     getMainWindow()?.webContents.send(IPC.AUTH_SESSION_CHANGED, null)
     return { ok: true }
   })
@@ -452,11 +469,9 @@ async function handleAuthCallback(url: string): Promise<void> {
       console.info('[auth] session ok', { companyId: session.companyId, agentId: session.agentId })
       win?.webContents.send(IPC.AUTH_SESSION_CHANGED, session)
       if (panelSsoCode) {
-        try {
-          await seedPanelSession(panelSsoCode)
-        } catch (seedErr) {
+        void seedPanelSession(panelSsoCode).catch((seedErr) => {
           console.warn('[auth] panel SSO seed failed', seedErr)
-        }
+        })
       }
       await onRealSessionReady()
       clearDemoPdvai()
@@ -500,7 +515,12 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     if (process.platform === 'win32') {
-      app.setAppUserModelId('br.com.delivai.delidesk')
+      const channel = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
+        .trim()
+        .toLowerCase()
+      app.setAppUserModelId(
+        channel === 'prod' ? 'br.com.delivai.delidesk' : 'br.com.delivai.delidesk.sandbox'
+      )
     }
 
     registerProtocolClient()
@@ -520,8 +540,11 @@ if (!gotLock) {
       } else if (session && !isMockSession(session)) {
         void onRealSessionReady().then(() => {
           clearDemoPdvai()
-          // Rehidrata nome/logo do painel (sessões antigas com UUID como “nome”).
-          void import('./panel-view').then((m) => m.hydrateBrandingAfterSeed())
+          // Painel embutido precisa de localStorage; shell sozinho não basta.
+          void import('./panel-view').then(async (m) => {
+            await m.ensurePanelHydrated()
+            await m.hydrateBrandingAfterSeed()
+          })
         })
       }
     })

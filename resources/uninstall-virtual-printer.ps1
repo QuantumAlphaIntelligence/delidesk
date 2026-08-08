@@ -1,13 +1,16 @@
+param(
+  [string]$PrinterName = 'DeliDesk',
+  [string]$PortName = 'DeliDesk_TCP_19100'
+)
+
 $ErrorActionPreference = 'Continue'
-$printerName = 'DeliDesk'
-$portName = 'DeliDesk_TCP_19100'
 
-if (Get-Printer -Name $printerName -ErrorAction SilentlyContinue) {
-  Remove-Printer -Name $printerName -ErrorAction SilentlyContinue
+if (Get-Printer -Name $PrinterName -ErrorAction SilentlyContinue) {
+  Remove-Printer -Name $PrinterName -ErrorAction SilentlyContinue
 }
 
-if (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue) {
-  Remove-PrinterPort -Name $portName -ErrorAction SilentlyContinue
+if (Get-PrinterPort -Name $PortName -ErrorAction SilentlyContinue) {
+  Remove-PrinterPort -Name $PortName -ErrorAction SilentlyContinue
 }
 
-Write-Output "OK removed"
+Write-Output "OK removed $PrinterName"

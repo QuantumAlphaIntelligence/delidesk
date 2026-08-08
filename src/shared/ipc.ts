@@ -1,5 +1,8 @@
 export const PROTOCOL = 'delidesk'
 
+/** Shell do app: loja (Pedidos…) ou equipe DelivAI (painel /dev). */
+export type ShellRole = 'store' | 'dev'
+
 export type AuthSession = {
   accessToken: string
   refreshToken?: string
@@ -11,6 +14,8 @@ export type AuthSession = {
   companyId?: string
   agentId?: string
   expiresAt?: number
+  /** Detectado após SSO do painel (colaborador CNPJ interno). */
+  shellRole?: ShellRole
 }
 
 export type AppOnlineStatus = 'online' | 'offline'
