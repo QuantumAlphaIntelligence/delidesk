@@ -305,3 +305,75 @@ export async function postVirtualCapture(payload: {
 export async function refreshTokens(): Promise<void> {
   await refreshSession()
 }
+
+export type PanelSnapshot = {
+  user: Record<string, unknown>
+  licenseModules?: Record<string, unknown>
+  companyName?: string
+  companyLogoUrl?: string | null
+}
+
+function parsePanelSnapshot(data: JsonMap): PanelSnapshot | null {
+  const user = data.user
+  if (!user || typeof user !== 'object') return null
+  const modules = data.license_modules
+  return {
+    user: user as Record<string, unknown>,
+    licenseModules:
+      modules && typeof modules === 'object'
+        ? (modules as Record<string, unknown>)
+        : undefined,
+    companyName:
+      typeof data.company_name === 'string' ? data.company_name : undefined,
+    companyLogoUrl:
+      typeof data.company_logo_url === 'string' ? data.company_logo_url : null
+  }
+}
+
+/** Troca panel_sso_code (uso único) — chamado no main, sem BrowserView. */
+export async function fetchPanelSessionByCode(code: string): Promise<PanelSnapshot> {
+  const res = await fetch(agentUrl('/oauth/panel-session'), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ code: code.trim() })
+  })
+  const data = await readJson(res)
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === 'string'
+        ? data.message
+        : `panel-session (${res.status})`
+    )
+  }
+  const snap = parsePanelSnapshot(data)
+  if (!snap) throw new Error('Resposta SSO sem usuário')
+  return snap
+}
+
+/** Reemite snapshot com Bearer do agente (seed falhou / reabrir app). */
+export async function fetchPanelHydrate(): Promise<PanelSnapshot> {
+  const res = await authedFetch('/oauth/panel-hydrate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  })
+  const data = await readJson(res)
+  if (res.status === 401) {
+    throw new AgentAuthError(
+      typeof data.message === 'string' ? data.message : 'Não autorizado'
+    )
+  }
+  if (!res.ok) {
+    throw new Error(
+      typeof data.message === 'string'
+        ? data.message
+        : `panel-hydrate (${res.status})`
+    )
+  }
+  const snap = parsePanelSnapshot(data)
+  if (!snap) throw new Error('Resposta hydrate sem usuário')
+  return snap
+}

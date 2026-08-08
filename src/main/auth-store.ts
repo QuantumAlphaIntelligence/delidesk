@@ -1,7 +1,7 @@
 import { safeStorage, app } from 'electron'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import type { AuthSession } from '../shared/ipc'
+import type { AuthSession, ShellRole } from '../shared/ipc'
 import { getBackendBaseUrl, REDIRECT_URI } from '../shared/config'
 import {
   sanitizeCompanyName,
@@ -134,12 +134,13 @@ function sessionFromTokenResponse(data: TokenResponse): AuthSession {
   }
 }
 
-/** Atualiza nome/logo/CNPJ da loja sem trocar tokens (ex.: painel ou /printers). */
+/** Atualiza nome/logo/CNPJ/papel do shell sem trocar tokens (ex.: painel ou /printers). */
 export function patchSessionBranding(partial: {
   companyName?: string
   companyLogoUrl?: string | null
   companyCnpj?: string
   companyId?: string
+  shellRole?: ShellRole
 }): AuthSession | null {
   const current = getSession()
   if (!current) return null
@@ -155,13 +156,15 @@ export function patchSessionBranding(partial: {
     companyLogoUrl: logo !== undefined ? logo : current.companyLogoUrl,
     companyCnpj:
       cnpjDigits && cnpjDigits.length === 14 ? cnpjDigits : current.companyCnpj,
-    companyId: partial.companyId?.trim() || current.companyId
+    companyId: partial.companyId?.trim() || current.companyId,
+    shellRole: partial.shellRole ?? current.shellRole
   }
   if (
     next.companyName === current.companyName &&
     next.companyLogoUrl === current.companyLogoUrl &&
     next.companyCnpj === current.companyCnpj &&
-    next.companyId === current.companyId
+    next.companyId === current.companyId &&
+    next.shellRole === current.shellRole
   ) {
     return current
   }

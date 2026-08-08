@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import type { UpdateUiStatus } from '@shared/ipc'
 
 /**
- * Toast canto inferior esquerdo — após download reinicia sozinho (contagem),
- * com “Reiniciar agora” ou “Depois” (aplica ao fechar o app).
+ * Toast canto inferior esquerdo — “Instalar agora” (estilo Cursor).
+ * Só aparece com update baixado (ou disponível em download).
  */
 export function UpdateToast(): React.JSX.Element | null {
   const [status, setStatus] = useState<UpdateUiStatus>({ state: 'idle' })
@@ -27,8 +27,6 @@ export function UpdateToast(): React.JSX.Element | null {
 
   const version = status.version
   const ready = status.state === 'downloaded'
-  const autoSec =
-    ready && typeof status.autoRestartInSec === 'number' ? status.autoRestartInSec : null
 
   return (
     <div
@@ -40,15 +38,9 @@ export function UpdateToast(): React.JSX.Element | null {
       </p>
       <p className="mt-1 text-xs text-white/75 leading-relaxed">
         DeliDesk {version}
-        {!ready && ' está sendo baixada em segundo plano…'}
-        {ready && autoSec != null && (
-          <>
-            {' '}
-            foi baixada. Reiniciando em <span className="font-semibold text-white">{autoSec}s</span>{' '}
-            para aplicar…
-          </>
-        )}
-        {ready && autoSec == null && ' foi baixada. Será aplicada ao fechar o app (ou reinicie agora).'}
+        {ready
+          ? ' foi baixada. Instale agora para aplicar (o app reinicia).'
+          : ' está sendo baixada em segundo plano…'}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {ready && (
@@ -63,18 +55,13 @@ export function UpdateToast(): React.JSX.Element | null {
               })
             }}
           >
-            {installing ? 'Reiniciando…' : 'Reiniciar agora'}
+            {installing ? 'Instalando…' : 'Instalar agora'}
           </button>
         )}
         <button
           type="button"
           className="rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/10"
-          onClick={() => {
-            if (ready) {
-              void window.delidesk.postponeUpdate()
-            }
-            setDismissed(true)
-          }}
+          onClick={() => setDismissed(true)}
         >
           Depois
         </button>

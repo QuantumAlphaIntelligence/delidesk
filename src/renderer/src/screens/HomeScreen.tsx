@@ -21,7 +21,20 @@ const PANEL_MODES = new Set<AppNavId>([
   'schedule',
   'company',
   'license',
-  'clients'
+  'clients',
+  'dev-home',
+  'dev-licenses',
+  'dev-contracts',
+  'dev-evolution',
+  'dev-bot',
+  'dev-delidesk',
+  'dev-companies',
+  'dev-prompts',
+  'dev-clients',
+  'dev-database',
+  'dev-logs',
+  'dev-observability',
+  'dev-permissoes'
 ])
 
 function isPanelMode(id: AppNavId): id is PanelMode {
@@ -50,9 +63,45 @@ function titleFor(nav: AppNavId): string {
       return 'Licença'
     case 'clients':
       return 'Clientes'
+    case 'dev-home':
+      return 'Painel de controle'
+    case 'dev-licenses':
+      return 'Licenças'
+    case 'dev-contracts':
+      return 'Contratos'
+    case 'dev-evolution':
+      return 'Evolution'
+    case 'dev-bot':
+      return 'Bot WhatsApp'
+    case 'dev-delidesk':
+      return 'DeliDesk'
+    case 'dev-companies':
+      return 'Empresas'
+    case 'dev-prompts':
+      return 'Prompts'
+    case 'dev-clients':
+      return 'Clientes'
+    case 'dev-database':
+      return 'Banco de dados'
+    case 'dev-logs':
+      return 'Logs'
+    case 'dev-observability':
+      return 'Observabilidade'
+    case 'dev-permissoes':
+      return 'Permissões'
     default:
       return 'DeliDesk'
   }
+}
+
+function defaultNavForRole(role: AuthSession['shellRole']): AppNavId {
+  return role === 'dev' ? 'dev-home' : 'orders'
+}
+
+function navMatchesRole(nav: AppNavId, role: AuthSession['shellRole']): boolean {
+  const isDevNav = nav.startsWith('dev-')
+  if (role === 'dev') return isDevNav || nav === 'print'
+  return !isDevNav
 }
 
 export function HomeScreen({
@@ -60,10 +109,17 @@ export function HomeScreen({
   online,
   onLogout
 }: Props): React.JSX.Element {
-  const [nav, setNav] = useState<AppNavId>('orders')
+  const shellRole = session.shellRole === 'dev' ? 'dev' : 'store'
+  const [nav, setNav] = useState<AppNavId>(() => defaultNavForRole(shellRole))
   const embedPanel = isPanelMode(nav)
   const companyLabel = displayCompanyName(session)
   const companyDocLabel = maskCnpj(session.companyCnpj)
+
+  useEffect(() => {
+    if (!navMatchesRole(nav, shellRole)) {
+      setNav(defaultNavForRole(shellRole))
+    }
+  }, [shellRole, nav])
 
   useEffect(() => {
     if (!embedPanel) {
@@ -75,6 +131,7 @@ export function HomeScreen({
     <div className="relative flex h-screen overflow-hidden bg-gradient-delivai">
       <AppRail
         active={nav}
+        shellRole={shellRole}
         companyLabel={companyLabel}
         companyDocLabel={companyDocLabel}
         companyLogoUrl={session.companyLogoUrl}
@@ -99,7 +156,7 @@ export function HomeScreen({
           {nav === 'print' && (
             <PrintScreen companyName={companyLabel} online={online} />
           )}
-          {nav === 'pdvai' && (
+          {nav === 'pdvai' && shellRole !== 'dev' && (
             <PdvaiScreen companyName={companyLabel} online={online} />
           )}
           {embedPanel && (

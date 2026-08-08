@@ -38,7 +38,6 @@ export type DelideskApi = {
   onPdvaiStateChanged: (cb: (state: PdvaiState) => void) => () => void
   getUpdateStatus: () => Promise<UpdateUiStatus>
   installUpdate: () => Promise<{ ok: boolean; error?: string }>
-  postponeUpdate: () => Promise<{ ok: boolean }>
   onUpdateStatus: (cb: (status: UpdateUiStatus) => void) => () => void
 }
 

@@ -1,8 +1,11 @@
+param(
+  [string]$PrinterName = 'DeliDesk',
+  [string]$PortName = 'DeliDesk_TCP_19100',
+  [int]$Port = 19100
+)
+
 $ErrorActionPreference = 'Stop'
-$portName = 'DeliDesk_TCP_19100'
-$printerName = 'DeliDesk'
 $hostAddr = '127.0.0.1'
-$port = 19100
 $preferredDriver = 'Generic / Text Only'
 
 # Garante o driver de texto (RAW). Sem ele o Windows cai no IPP Class Driver,
@@ -16,13 +19,13 @@ try {
   try { Add-PrinterDriver -Name $preferredDriver } catch { }
 }
 
-if (-not (Get-PrinterPort -Name $portName -ErrorAction SilentlyContinue)) {
-  Add-PrinterPort -Name $portName -PrinterHostAddress $hostAddr -PortNumber $port
+if (-not (Get-PrinterPort -Name $PortName -ErrorAction SilentlyContinue)) {
+  Add-PrinterPort -Name $PortName -PrinterHostAddress $hostAddr -PortNumber $Port
 }
 
-$existing = Get-Printer -Name $printerName -ErrorAction SilentlyContinue
+$existing = Get-Printer -Name $PrinterName -ErrorAction SilentlyContinue
 if ($existing -and $existing.DriverName -ne $preferredDriver) {
-  Remove-Printer -Name $printerName
+  Remove-Printer -Name $PrinterName
   $existing = $null
 }
 
@@ -40,7 +43,7 @@ if (-not $existing) {
           try { Add-PrinterDriver -Name $d } catch { }
         }
       }
-      Add-Printer -Name $printerName -DriverName $d -PortName $portName
+      Add-Printer -Name $PrinterName -DriverName $d -PortName $PortName
       $ok = $true
       break
     } catch {
@@ -48,13 +51,13 @@ if (-not $existing) {
     }
   }
   if (-not $ok) {
-    throw 'Nenhum driver compatível para criar a impressora DeliDesk'
+    throw "Nenhum driver compatível para criar a impressora $PrinterName"
   }
 }
 
-$final = Get-Printer -Name $printerName
+$final = Get-Printer -Name $PrinterName
 if ($final.DriverName -ne $preferredDriver) {
-  Write-Warning "DeliDesk criou com driver '$($final.DriverName)' (ideal: $preferredDriver). Captura iFood pode falhar."
+  Write-Warning "$PrinterName criou com driver '$($final.DriverName)' (ideal: $preferredDriver). Captura iFood pode falhar."
 }
 
-Write-Output "OK $printerName driver=$($final.DriverName)"
+Write-Output "OK $PrinterName driver=$($final.DriverName) port=$Port"

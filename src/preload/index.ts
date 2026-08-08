@@ -91,8 +91,6 @@ const api = {
     ipcRenderer.invoke(IPC.UPDATE_GET_STATUS) as Promise<UpdateUiStatus>,
   installUpdate: () =>
     ipcRenderer.invoke(IPC.UPDATE_INSTALL) as Promise<{ ok: boolean; error?: string }>,
-  postponeUpdate: () =>
-    ipcRenderer.invoke(IPC.UPDATE_POSTPONE) as Promise<{ ok: boolean }>,
   onUpdateStatus: (cb: (status: UpdateUiStatus) => void): (() => void) => {
     const listener = (_: Electron.IpcRendererEvent, status: UpdateUiStatus) => cb(status)
     ipcRenderer.on(IPC.UPDATE_STATUS, listener)

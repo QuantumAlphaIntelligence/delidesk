@@ -1,5 +1,8 @@
 export const PROTOCOL = 'delidesk'
 
+/** Shell do app: loja (Pedidos…) ou equipe DelivAI (painel /dev). */
+export type ShellRole = 'store' | 'dev'
+
 export type AuthSession = {
   accessToken: string
   refreshToken?: string
@@ -11,6 +14,8 @@ export type AuthSession = {
   companyId?: string
   agentId?: string
   expiresAt?: number
+  /** Detectado após SSO do painel (colaborador CNPJ interno). */
+  shellRole?: ShellRole
 }
 
 export type AppOnlineStatus = 'online' | 'offline'
@@ -61,7 +66,6 @@ export const IPC = {
   PDVAI_STATE_CHANGED: 'pdvai:state-changed',
   UPDATE_GET_STATUS: 'update:get-status',
   UPDATE_INSTALL: 'update:install',
-  UPDATE_POSTPONE: 'update:postpone',
   UPDATE_STATUS: 'update:status'
 } as const
 
@@ -69,10 +73,5 @@ export type UpdateUiStatus =
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'available'; version: string }
-  | {
-      state: 'downloaded'
-      version: string
-      /** Segundos até reinício automático; omitido se adiado. */
-      autoRestartInSec?: number
-    }
+  | { state: 'downloaded'; version: string }
   | { state: 'error'; message: string }
