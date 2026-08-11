@@ -31,6 +31,9 @@ export type DelideskApi = {
   setPanelBounds: (bounds: PanelBounds) => Promise<{ ok: boolean }>
   reloadPanel: () => Promise<{ ok: boolean }>
   openPanelExternal: (mode: PanelMode) => Promise<{ ok: boolean }>
+  onPanelNavChanged: (cb: (mode: PanelMode) => void) => () => void
+  getAppVersion: () => Promise<{ version: string; channel: string }>
+  checkForUpdates: () => Promise<{ ok: boolean }>
   getPdvaiState: () => Promise<PdvaiState>
   createPdvaiOrder: (itemId: string, qty?: number) => Promise<PdvaiState>
   syncPdvai: () => Promise<PdvaiState>

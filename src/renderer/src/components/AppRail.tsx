@@ -47,6 +47,8 @@ type Props = {
   onLogout: () => void
 }
 
+type AppVersionInfo = { version: string; channel: string }
+
 function IconBox({ children }: { children: ReactNode }): React.JSX.Element {
   return (
     <span className="flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
@@ -352,6 +354,12 @@ export function AppRail({
   onNavigate,
   onLogout
 }: Props): React.JSX.Element {
+  const [appInfo, setAppInfo] = useState<AppVersionInfo | null>(null)
+  const [updateBusy, setUpdateBusy] = useState(false)
+
+  useEffect(() => {
+    void window.delidesk.getAppVersion().then(setAppInfo).catch(() => undefined)
+  }, [])
   const [expanded, setExpanded] = useState(false)
   const [logoFailed, setLogoFailed] = useState(false)
   const [logoReady, setLogoReady] = useState(false)
@@ -536,6 +544,39 @@ export function AppRail({
             </span>
           ) : null}
         </div>
+        <button
+          type="button"
+          title={
+            appInfo
+              ? `DeliDesk v${appInfo.version} (${appInfo.channel}) — verificar atualização`
+              : 'Sobre o DeliDesk — verificar atualização'
+          }
+          disabled={updateBusy}
+          onClick={() => {
+            setUpdateBusy(true)
+            void window.delidesk
+              .checkForUpdates()
+              .catch(() => undefined)
+              .finally(() => setUpdateBusy(false))
+          }}
+          className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-delivai-text-gray/70
+            transition hover:bg-white/10 hover:text-white disabled:opacity-50
+            ${expanded ? 'justify-start' : 'justify-center'}`}
+        >
+          <IconBox>
+            <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 8v5" strokeLinecap="round" />
+              <circle cx="12" cy="16" r="0.9" fill="currentColor" stroke="none" />
+            </svg>
+          </IconBox>
+          {expanded ? (
+            <span className="min-w-0 truncate text-left text-sm font-semibold">
+              {appInfo ? `v${appInfo.version}` : 'Versão'}
+              {updateBusy ? '…' : ''}
+            </span>
+          ) : null}
+        </button>
         <button
           type="button"
           title="Sair"

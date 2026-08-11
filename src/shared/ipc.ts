@@ -59,6 +59,10 @@ export const IPC = {
   PANEL_SET_BOUNDS: 'panel:set-bounds',
   PANEL_RELOAD: 'panel:reload',
   PANEL_OPEN_EXTERNAL: 'panel:open-external',
+  /** BrowserView mudou de rota (ex.: Abrir Entregas) → sincroniza rail. */
+  PANEL_NAV_CHANGED: 'panel:nav-changed',
+  APP_GET_VERSION: 'app:get-version',
+  UPDATE_CHECK: 'update:check',
   PDVAI_GET_STATE: 'pdvai:get-state',
   PDVAI_CREATE_ORDER: 'pdvai:create-order',
   PDVAI_SYNC: 'pdvai:sync',
