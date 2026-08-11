@@ -127,6 +127,14 @@ export function HomeScreen({
     }
   }, [embedPanel])
 
+  // Painel navega sozinho (ex.: Abrir Entregas) → rail acompanha.
+  useEffect(() => {
+    return window.delidesk.onPanelNavChanged((mode) => {
+      if (!navMatchesRole(mode, shellRole)) return
+      setNav(mode)
+    })
+  }, [shellRole])
+
   return (
     <div className="relative flex h-screen overflow-hidden bg-gradient-delivai">
       <AppRail
@@ -141,11 +149,30 @@ export function HomeScreen({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/25 px-4 py-2.5">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/20 px-4 py-2">
           <h1 className="min-w-0 truncate text-sm font-semibold text-white">{titleFor(nav)}</h1>
-          <span className={online === 'online' ? 'pill-online' : 'pill-offline'}>
-            ● {online === 'online' ? 'Online' : 'Offline'}
-          </span>
+          <div className="flex items-center gap-1">
+            {embedPanel ? (
+              <>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-[11px] text-white/45 transition hover:bg-white/5 hover:text-white/80"
+                  onClick={() => void window.delidesk.reloadPanel()}
+                  title="Recarregar painel"
+                >
+                  Recarregar
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md px-2 py-1 text-[11px] text-white/45 transition hover:bg-white/5 hover:text-white/80"
+                  onClick={() => void window.delidesk.openPanelExternal(nav)}
+                  title="Abre no navegador com a sidebar completa do DelivAI"
+                >
+                  Abrir no navegador
+                </button>
+              </>
+            ) : null}
+          </div>
         </header>
 
         <main
@@ -159,9 +186,7 @@ export function HomeScreen({
           {nav === 'pdvai' && shellRole !== 'dev' && (
             <PdvaiScreen companyName={companyLabel} online={online} />
           )}
-          {embedPanel && (
-            <PanelHost mode={nav} online={online === 'online'} title={titleFor(nav)} />
-          )}
+          {embedPanel && <PanelHost mode={nav} online={online === 'online'} />}
         </main>
       </div>
     </div>

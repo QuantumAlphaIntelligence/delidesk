@@ -4,14 +4,32 @@ import type { PanelMode } from '@shared/pdvai'
 type Props = {
   mode: PanelMode
   online: boolean
-  title?: string
+}
+
+function readBounds(el: HTMLElement): {
+  x: number
+  y: number
+  width: number
+  height: number
+} {
+  const rect = el.getBoundingClientRect()
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height
+  }
 }
 
 /**
  * Reserva a área do painel no layout e sincroniza bounds com BrowserView no main.
  * O BrowserView fica por cima desta região (não é iframe).
+ * Título da tela fica só no header do HomeScreen (sem repetir "Pedidos").
+ *
+ * Importante: resize só chama setPanelBounds — nunca showPanel com mode antigo,
+ * senão uma navegação interna (Abrir Entregas) é revertida pelo rail atrasado.
  */
-export function PanelHost({ mode, online, title }: Props): React.JSX.Element {
+export function PanelHost({ mode, online }: Props): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
@@ -23,31 +41,23 @@ export function PanelHost({ mode, online, title }: Props): React.JSX.Element {
     const el = ref.current
     if (!el) return
 
-    const sync = (): void => {
-      const rect = el.getBoundingClientRect()
-      const bounds = {
-        x: rect.x,
-        y: rect.y,
-        width: rect.width,
-        height: rect.height
-      }
-      void window.delidesk.showPanel(mode, bounds)
+    void window.delidesk.showPanel(mode, readBounds(el))
+
+    const syncBounds = (): void => {
+      void window.delidesk.setPanelBounds(readBounds(el))
     }
 
-    sync()
-    const ro = new ResizeObserver(sync)
+    const ro = new ResizeObserver(syncBounds)
     ro.observe(el)
-    // Sidebar empurra o flex no hover — observar o pai também.
     const parent = el.parentElement
     if (parent) ro.observe(parent)
-    window.addEventListener('resize', sync)
-    // Durante transition de width da rail, ResizeObserver às vezes atrasa um frame.
-    const onTransition = (): void => sync()
+    window.addEventListener('resize', syncBounds)
+    const onTransition = (): void => syncBounds()
     window.addEventListener('transitionend', onTransition)
 
     return () => {
       ro.disconnect()
-      window.removeEventListener('resize', sync)
+      window.removeEventListener('resize', syncBounds)
       window.removeEventListener('transitionend', onTransition)
       void window.delidesk.hidePanel()
     }
@@ -74,31 +84,9 @@ export function PanelHost({ mode, online, title }: Props): React.JSX.Element {
   }
 
   return (
-    <div className="h-full min-h-0 flex flex-col gap-1.5">
-      <div className="flex items-center justify-end gap-2 text-xs shrink-0 px-0.5">
-        <span className="mr-auto text-delivai-text-gray/50 text-[11px]">
-          {title ?? 'Painel'}
-        </span>
-        <button
-          type="button"
-          className="btn-secondary text-[11px] py-1 px-2.5"
-          onClick={() => void window.delidesk.reloadPanel()}
-        >
-          Recarregar
-        </button>
-        <button
-          type="button"
-          className="btn-secondary text-[11px] py-1 px-2.5"
-          onClick={() => void window.delidesk.openPanelExternal(mode)}
-          title="Abre no navegador com a sidebar completa do DelivAI"
-        >
-          Abrir no navegador
-        </button>
-      </div>
-      <div
-        ref={ref}
-        className="flex-1 min-h-[380px] rounded-xl border border-white/10 bg-black/25 overflow-hidden shadow-inner"
-      />
-    </div>
+    <div
+      ref={ref}
+      className="h-full min-h-[380px] rounded-xl border border-white/10 bg-black/25 overflow-hidden shadow-inner"
+    />
   )
 }

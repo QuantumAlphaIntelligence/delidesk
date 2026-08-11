@@ -88,11 +88,31 @@ export function startAutoUpdater(getMainWindow: () => BrowserWindow | null): voi
     void autoUpdater.checkForUpdates().catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err)
       console.warn('[update] check failed', message)
+      emit(getMainWindow(), { state: 'error', message })
     })
   }
 
   setTimeout(runCheck, INITIAL_DELAY_MS)
   checkTimer = setInterval(runCheck, CHECK_INTERVAL_MS)
+}
+
+/** Disparo manual (botão Versão na sidebar). */
+export function checkForUpdatesNow(getMainWindow: () => BrowserWindow | null): void {
+  if (!app.isPackaged) {
+    emit(getMainWindow(), {
+      state: 'error',
+      message: 'Atualização só no instalador (não no modo dev)',
+    })
+    return
+  }
+  if (!started) {
+    startAutoUpdater(getMainWindow)
+  }
+  emit(getMainWindow(), { state: 'checking' })
+  void autoUpdater.checkForUpdates().catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : String(err)
+    emit(getMainWindow(), { state: 'error', message })
+  })
 }
 
 export function stopAutoUpdater(): void {

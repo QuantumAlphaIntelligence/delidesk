@@ -81,6 +81,7 @@ import {
   syncPending
 } from './pdvai-service'
 import {
+  checkForUpdatesNow,
   getUpdateStatus,
   installDownloadedUpdate,
   startAutoUpdater,
@@ -371,6 +372,18 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.UPDATE_GET_STATUS, () => getUpdateStatus())
   ipcMain.handle(IPC.UPDATE_INSTALL, () => installDownloadedUpdate())
+  ipcMain.handle(IPC.UPDATE_CHECK, () => {
+    checkForUpdatesNow(getMainWindow)
+    return { ok: true }
+  })
+  ipcMain.handle(IPC.APP_GET_VERSION, () => ({
+    version: app.getVersion(),
+    channel:
+      (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox').toLowerCase() ===
+      'prod'
+        ? 'prod'
+        : 'sandbox'
+  }))
 }
 
 function findDeeplink(argv: string[]): string | undefined {
