@@ -18,14 +18,14 @@ export function getBackendBaseUrl(): string {
   return (
     process.env.DELIDESK_API_URL ||
     process.env.DELIDESK_BACKEND_URL ||
-    'https://api.delivai.com.br'
+    'https://delivai-prod-delivai-backend.rwysej.easypanel.host'
   ).replace(/\/$/, '')
 }
 
 /** URL da tela Autorizar no front DelivAI. Override com DELIDESK_AUTH_URL. */
 export function getAuthAuthorizeUrl(state: string, machineLabel?: string): string {
   const base =
-    process.env.DELIDESK_AUTH_URL || 'https://app.delivai.com.br/autorizar'
+    process.env.DELIDESK_AUTH_URL || 'https://delivaibot.com/autorizar'
 
   const url = new URL(base)
   url.searchParams.set('client_id', 'delidesk')
@@ -46,7 +46,7 @@ export function getPanelOrigin(): string {
   try {
     return new URL(raw).origin
   } catch {
-    return 'https://app.delivai.com.br'
+    return 'https://delivaibot.com'
   }
 }
 
@@ -127,6 +127,41 @@ export function getPanelModeUrl(mode: string): string {
     default:
       return getPanelUrl()
   }
+}
+
+/** Mapeia URL do painel embutido → aba da rail (sync inverso do navigate interno). */
+export function panelModeFromUrl(url: string): string | null {
+  let path = ''
+  try {
+    path = new URL(url).pathname
+  } catch {
+    return null
+  }
+  const p = path.replace(/\/+$/, '') || '/'
+  if (p.includes('/dashboard/delivery')) return 'delivery'
+  if (p.includes('/dashboard/motoboys')) return 'motoboys'
+  if (p.includes('/dashboard/schedule')) return 'schedule'
+  if (p.includes('/dashboard/company')) return 'company'
+  if (p.includes('/dashboard/license')) return 'license'
+  if (p.includes('/dashboard/clientes')) return 'clients'
+  if (p.includes('/dashboard/conversations') || p.includes('/dashboard/chat')) return 'chat'
+  if (p.includes('/dashboard/orders') || p.includes('/dashboard/internal-order')) return 'orders'
+  if (p.endsWith('/dev') || p.includes('/dev/')) {
+    if (p.includes('/dev/licenses')) return 'dev-licenses'
+    if (p.includes('/dev/contracts')) return 'dev-contracts'
+    if (p.includes('/dev/evolution')) return 'dev-evolution'
+    if (p.includes('/dev/bot')) return 'dev-bot'
+    if (p.includes('/dev/delidesk')) return 'dev-delidesk'
+    if (p.includes('/dev/cardapio')) return 'dev-companies'
+    if (p.includes('/dev/prompts')) return 'dev-prompts'
+    if (p.includes('/dev/clientes')) return 'dev-clients'
+    if (p.includes('/dev/database')) return 'dev-database'
+    if (p.includes('/dev/logs')) return 'dev-logs'
+    if (p.includes('/dev/observability')) return 'dev-observability'
+    if (p.includes('/dev/permissoes')) return 'dev-permissoes'
+    return 'dev-home'
+  }
+  return null
 }
 
 export function generatePkce(): { verifier: string; challenge: string; state: string } {

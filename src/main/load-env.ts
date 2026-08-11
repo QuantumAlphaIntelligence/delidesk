@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { app } from 'electron'
 
 /** Carrega pares KEY=VALUE de um arquivo .env no process.env. */
 function loadEnvFile(filePath: string, opts?: { override?: boolean }): void {

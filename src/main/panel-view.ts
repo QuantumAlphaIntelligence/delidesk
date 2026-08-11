@@ -1,6 +1,12 @@
 import { BrowserView, shell } from 'electron'
 import { getMainWindow, resolveWindowTitle } from './window'
-import { getPanelModeUrl, getPanelOrigin, getPanelPathUrl, getPanelUrl } from '../shared/config'
+import {
+  getPanelModeUrl,
+  getPanelOrigin,
+  getPanelPathUrl,
+  getPanelUrl,
+  panelModeFromUrl
+} from '../shared/config'
 import { getDelivaiSession } from './delivai-session'
 import type { PanelBounds, PanelMode } from '../shared/pdvai'
 import { IPC } from '../shared/ipc'
@@ -100,6 +106,14 @@ function ensureView(): BrowserView {
       void syncBrandingFromPanel().catch(() => undefined)
       const win = getMainWindow()
       if (win && !win.isDestroyed()) win.setTitle(resolveWindowTitle())
+      emitPanelNavFromUrl(view?.webContents.getURL() || '')
+    })
+    // SPA navigate (React Router) — sync rail quando o painel muda de rota sozinho.
+    view.webContents.on('did-navigate-in-page', (_e, url) => {
+      emitPanelNavFromUrl(url)
+    })
+    view.webContents.on('did-navigate', (_e, url) => {
+      emitPanelNavFromUrl(url)
     })
     // BrowserView também dispara page-title-updated na janela pai (virava “DeliDesk”/Pedidos).
     view.webContents.on('page-title-updated', (e) => {
@@ -109,6 +123,17 @@ function ensureView(): BrowserView {
     })
   }
   return view
+}
+
+function emitPanelNavFromUrl(url: string): void {
+  const mode = panelModeFromUrl(url) as PanelMode | null
+  if (!mode) return
+  if (mode === currentMode) return
+  currentMode = mode
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send(IPC.PANEL_NAV_CHANGED, mode)
+  }
 }
 
 /** CNPJ interno DelivAI — espelho de front `DELIVAI_INTERNAL_CNPJ`. */
@@ -454,7 +479,8 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
           console.warn('[panel] showPanel: sem sessão do painel')
           return
         }
-        const target = urlFor(mode)
+        // Usa currentMode (pode ter mudado durante o hydrate).
+        const target = urlFor(currentMode)
         if (!alreadyOn(v, target)) {
           await safeLoadURL(v, target)
         } else {
@@ -465,6 +491,15 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
         showPanelHydrateInFlight = null
       }
     })()
+  } else {
+    // Hydrate em voo: ao terminar, showPanel seguinte já aponta currentMode.
+    void showPanelHydrateInFlight.then(() => {
+      if (!view || !visible || seeding) return
+      const target = urlFor(currentMode)
+      if (!alreadyOn(view, target)) {
+        void safeLoadURL(view, target)
+      }
+    })
   }
 }
 

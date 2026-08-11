@@ -73,6 +73,15 @@ const api = {
   reloadPanel: () => ipcRenderer.invoke(IPC.PANEL_RELOAD) as Promise<{ ok: boolean }>,
   openPanelExternal: (mode: PanelMode) =>
     ipcRenderer.invoke(IPC.PANEL_OPEN_EXTERNAL, mode) as Promise<{ ok: boolean }>,
+  onPanelNavChanged: (cb: (mode: PanelMode) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, mode: PanelMode) => cb(mode)
+    ipcRenderer.on(IPC.PANEL_NAV_CHANGED, listener)
+    return () => ipcRenderer.removeListener(IPC.PANEL_NAV_CHANGED, listener)
+  },
+  getAppVersion: () =>
+    ipcRenderer.invoke(IPC.APP_GET_VERSION) as Promise<{ version: string; channel: string }>,
+  checkForUpdates: () =>
+    ipcRenderer.invoke(IPC.UPDATE_CHECK) as Promise<{ ok: boolean }>,
 
   getPdvaiState: () =>
     ipcRenderer.invoke(IPC.PDVAI_GET_STATE) as Promise<PdvaiState>,
