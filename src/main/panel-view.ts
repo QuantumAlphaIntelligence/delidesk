@@ -32,6 +32,9 @@ let contentLoaded = false
 let seeding = false
 let embedHooked = false
 
+/** Prefixo em console.log → main sincroniza a rail (React Router usa pushState sem did-navigate-in-page). */
+const PANEL_NAV_CONSOLE_PREFIX = '[delidesk-panel-nav]'
+
 const EMBED_BOOTSTRAP = `
 (() => {
   try {
@@ -51,6 +54,23 @@ const EMBED_BOOTSTRAP = `
         '*::-webkit-scrollbar-corner{background:transparent!important;}'
       ].join('');
       document.head.appendChild(s);
+    }
+    if (!window.__delideskNavHooked) {
+      window.__delideskNavHooked = true;
+      const notify = () => {
+        try {
+          console.log('${PANEL_NAV_CONSOLE_PREFIX}', location.href);
+        } catch (e) {}
+      };
+      const wrap = (fn) => function () {
+        const ret = fn.apply(this, arguments);
+        notify();
+        return ret;
+      };
+      history.pushState = wrap(history.pushState.bind(history));
+      history.replaceState = wrap(history.replaceState.bind(history));
+      window.addEventListener('popstate', notify);
+      notify();
     }
   } catch (e) {}
   true;
@@ -115,6 +135,16 @@ function ensureView(): BrowserView {
     view.webContents.on('did-navigate', (_e, url) => {
       emitPanelNavFromUrl(url)
     })
+    // pushState/replaceState do painel (Abrir Entregas etc.) — Electron às vezes não emite did-navigate-in-page.
+    view.webContents.on('console-message', (event: { message?: string }, ...rest: unknown[]) => {
+      // Electron 35+: message no event; versões antigas: (event, level, message, …).
+      const legacyMsg = typeof rest[1] === 'string' ? rest[1] : ''
+      const msg = String(event?.message || legacyMsg || '')
+      if (!msg.includes(PANEL_NAV_CONSOLE_PREFIX)) return
+      const idx = msg.indexOf(PANEL_NAV_CONSOLE_PREFIX)
+      const url = msg.slice(idx + PANEL_NAV_CONSOLE_PREFIX.length).trim()
+      if (url) emitPanelNavFromUrl(url)
+    })
     // BrowserView também dispara page-title-updated na janela pai (virava “DeliDesk”/Pedidos).
     view.webContents.on('page-title-updated', (e) => {
       e.preventDefault()
@@ -128,9 +158,9 @@ function ensureView(): BrowserView {
 function emitPanelNavFromUrl(url: string): void {
   const mode = panelModeFromUrl(url) as PanelMode | null
   if (!mode) return
-  if (mode === currentMode) return
   currentMode = mode
   const win = getMainWindow()
+  // Sempre avisar a rail: currentMode no main pode já estar certo e a UI ainda em Pedidos.
   if (win && !win.isDestroyed()) {
     win.webContents.send(IPC.PANEL_NAV_CHANGED, mode)
   }
