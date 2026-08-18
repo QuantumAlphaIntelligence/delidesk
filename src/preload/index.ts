@@ -84,7 +84,11 @@ const api = {
     return () => ipcRenderer.removeListener(IPC.PANEL_REAUTH_REQUIRED, listener)
   },
   getAppVersion: () =>
-    ipcRenderer.invoke(IPC.APP_GET_VERSION) as Promise<{ version: string; channel: string }>,
+    ipcRenderer.invoke(IPC.APP_GET_VERSION) as Promise<{
+      version: string
+      channel: string
+      packaged: boolean
+    }>,
   checkForUpdates: () =>
     ipcRenderer.invoke(IPC.UPDATE_CHECK) as Promise<{ ok: boolean }>,
 

@@ -1,20 +1,34 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { UpdateUiStatus } from '@shared/ipc'
 
-type AppVersionInfo = { version: string; channel: string }
+type AppVersionInfo = { version: string; channel: string; packaged?: boolean }
 
 type Props = {
   expanded: boolean
   appInfo: AppVersionInfo | null
 }
 
-function toneFromStatus(status: UpdateUiStatus): {
+function toneFromStatus(
+  status: UpdateUiStatus,
+  packaged: boolean
+): {
   tone: 'ok' | 'optional' | 'mandatory' | 'neutral'
   label: string
   detail: string
   canInstall: boolean
   canCheck: boolean
 } {
+  if (!packaged) {
+    return {
+      tone: 'neutral',
+      label: 'Modo desenvolvimento',
+      detail:
+        'A versão vem do package.json. Atualização automática só no instalador (.exe) sandbox/prod.',
+      canInstall: false,
+      canCheck: false
+    }
+  }
   switch (status.state) {
     case 'up_to_date':
       return {
@@ -61,7 +75,7 @@ function toneFromStatus(status: UpdateUiStatus): {
       return {
         tone: 'neutral',
         label: 'Não foi possível verificar',
-        detail: status.message || 'Tente de novo em instantes.',
+        detail: 'Tente de novo em instantes. Se persistir, reinstale pelo painel.',
         canInstall: false,
         canCheck: true
       }
@@ -83,30 +97,50 @@ const toneClass: Record<string, string> = {
   neutral: 'border-white/15 bg-white/5 text-white/80'
 }
 
+const CARD_W = 288
+
 /**
  * Card de versão/atualização (sidebar) — verde / amarelo / vermelho + botão Atualizar.
+ * Portal no body: a rail tem overflow-hidden e cortava o popover.
  */
 export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<UpdateUiStatus>({ state: 'idle' })
   const [busy, setBusy] = useState(false)
   const [installing, setInstalling] = useState(false)
-  const [cardPos, setCardPos] = useState({ top: 0, left: 0 })
+  const [cardPos, setCardPos] = useState({ top: 8, left: 72 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
+
+  const packaged = appInfo?.packaged !== false
+  const channel = appInfo?.channel || '—'
+  const version = appInfo?.version || '…'
 
   useEffect(() => {
     void window.delidesk.getUpdateStatus().then(setStatus).catch(() => undefined)
     return window.delidesk.onUpdateStatus(setStatus)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || !btnRef.current) return
-    const rect = btnRef.current.getBoundingClientRect()
-    setCardPos({
-      top: Math.max(8, rect.bottom - 200),
-      left: rect.right + 8
-    })
+    const place = (): void => {
+      const rect = btnRef.current!.getBoundingClientRect()
+      const gap = 8
+      const estimatedH = 220
+      let left = rect.right + gap
+      let top = Math.min(
+        Math.max(8, rect.bottom - estimatedH),
+        window.innerHeight - estimatedH - 8
+      )
+      if (left + CARD_W > window.innerWidth - 8) {
+        left = Math.max(8, rect.left - CARD_W - gap)
+      }
+      if (left < 8) left = 8
+      setCardPos({ top, left })
+    }
+    place()
+    window.addEventListener('resize', place)
+    return () => window.removeEventListener('resize', place)
   }, [open, expanded])
 
   useEffect(() => {
@@ -120,11 +154,10 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
     return () => document.removeEventListener('mousedown', onDoc)
   }, [open])
 
-  const ui = toneFromStatus(status)
-  const channel = appInfo?.channel || '—'
-  const version = appInfo?.version || '…'
+  const ui = toneFromStatus(status, packaged)
 
   const runCheck = (): void => {
+    if (!packaged) return
     setBusy(true)
     void window.delidesk
       .checkForUpdates()
@@ -138,6 +171,60 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
       if (!res.ok) setInstalling(false)
     })
   }
+
+  const popover =
+    open && typeof document !== 'undefined'
+      ? createPortal(
+          <div
+            ref={cardRef}
+            style={{ top: cardPos.top, left: cardPos.left, width: CARD_W }}
+            className="fixed z-[99999] rounded-xl border border-white/15 bg-[#0a1620] p-3 shadow-2xl shadow-black/50"
+            role="dialog"
+            aria-label="Atualização do DeliDesk"
+            onMouseEnter={() => setOpen(true)}
+            onMouseLeave={() => setOpen(false)}
+          >
+            <p className="text-[11px] font-medium uppercase tracking-wide text-white/45">
+              DeliDesk · {channel}
+            </p>
+            <p className="mt-0.5 text-sm font-semibold text-white">v{version}</p>
+
+            <div className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${toneClass[ui.tone]}`}>
+              <p className="font-semibold">{ui.label}</p>
+              <p className="mt-1 break-words leading-relaxed opacity-90">{ui.detail}</p>
+            </div>
+
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {ui.canInstall ? (
+                <button
+                  type="button"
+                  disabled={installing}
+                  onClick={runInstall}
+                  className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50
+                  ${
+                    ui.tone === 'mandatory'
+                      ? 'bg-red-400 text-red-950 hover:brightness-110'
+                      : 'bg-delivai-neon-green text-delivai-blue-dark hover:brightness-110'
+                  }`}
+                >
+                  {installing ? 'Instalando…' : 'Atualizar agora'}
+                </button>
+              ) : null}
+              {ui.canCheck ? (
+                <button
+                  type="button"
+                  disabled={busy || status.state === 'checking'}
+                  onClick={runCheck}
+                  className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-white/80 hover:bg-white/10 disabled:opacity-50"
+                >
+                  {busy || status.state === 'checking' ? 'Verificando…' : 'Verificar'}
+                </button>
+              ) : null}
+            </div>
+          </div>,
+          document.body
+        )
+      : null
 
   return (
     <div className="relative">
@@ -177,56 +264,7 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
           </span>
         ) : null}
       </button>
-
-      {open ? (
-        <div
-          ref={cardRef}
-          style={{ top: cardPos.top, left: cardPos.left }}
-          className="fixed z-[9999] w-64 rounded-xl border border-white/15 bg-[#0a1620]/97 p-3 shadow-2xl shadow-black/50 backdrop-blur-md"
-          role="dialog"
-          aria-label="Atualização do DeliDesk"
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
-        >
-          <p className="text-[11px] font-medium uppercase tracking-wide text-white/45">
-            DeliDesk · {channel}
-          </p>
-          <p className="mt-0.5 text-sm font-semibold text-white">v{version}</p>
-
-          <div className={`mt-2 rounded-lg border px-2.5 py-2 text-xs ${toneClass[ui.tone]}`}>
-            <p className="font-semibold">{ui.label}</p>
-            <p className="mt-1 leading-relaxed opacity-90">{ui.detail}</p>
-          </div>
-
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {ui.canInstall ? (
-              <button
-                type="button"
-                disabled={installing}
-                onClick={runInstall}
-                className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50
-                  ${
-                    ui.tone === 'mandatory'
-                      ? 'bg-red-400 text-red-950 hover:brightness-110'
-                      : 'bg-delivai-neon-green text-delivai-blue-dark hover:brightness-110'
-                  }`}
-              >
-                {installing ? 'Instalando…' : 'Atualizar agora'}
-              </button>
-            ) : null}
-            {ui.canCheck ? (
-              <button
-                type="button"
-                disabled={busy || status.state === 'checking'}
-                onClick={runCheck}
-                className="rounded-lg border border-white/20 bg-white/5 px-2.5 py-1.5 text-[11px] font-medium text-white/80 hover:bg-white/10 disabled:opacity-50"
-              >
-                {busy || status.state === 'checking' ? 'Verificando…' : 'Verificar'}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      {popover}
     </div>
   )
 }

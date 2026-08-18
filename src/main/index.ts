@@ -378,6 +378,7 @@ function registerIpc(): void {
   })
   ipcMain.handle(IPC.APP_GET_VERSION, () => ({
     version: app.getVersion(),
+    packaged: app.isPackaged,
     channel:
       (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox').toLowerCase() ===
       'prod'
