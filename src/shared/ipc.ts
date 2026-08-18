@@ -75,9 +75,14 @@ export const IPC = {
   UPDATE_STATUS: 'update:status'
 } as const
 
+/** Urgência da atualização (card da sidebar + toast). */
+export type UpdateUrgency = 'optional' | 'mandatory'
+
 export type UpdateUiStatus =
   | { state: 'idle' }
   | { state: 'checking' }
-  | { state: 'available'; version: string }
-  | { state: 'downloaded'; version: string }
+  /** App na versão do feed — card verde. */
+  | { state: 'up_to_date' }
+  | { state: 'available'; version: string; urgency: UpdateUrgency }
+  | { state: 'downloaded'; version: string; urgency: UpdateUrgency }
   | { state: 'error'; message: string }
