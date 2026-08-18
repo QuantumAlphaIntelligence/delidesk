@@ -57,6 +57,23 @@ const EMBED_BOOTSTRAP = `
       ].join('');
       document.head.appendChild(s);
     }
+    if (!window.__delideskNavHooked) {
+      window.__delideskNavHooked = true;
+      const notify = () => {
+        try {
+          console.log('${PANEL_NAV_CONSOLE_PREFIX}', location.href);
+        } catch (e) {}
+      };
+      const wrap = (fn) => function () {
+        const ret = fn.apply(this, arguments);
+        notify();
+        return ret;
+      };
+      history.pushState = wrap(history.pushState.bind(history));
+      history.replaceState = wrap(history.replaceState.bind(history));
+      window.addEventListener('popstate', notify);
+      notify();
+    }
   } catch (e) {}
   true;
 })()
