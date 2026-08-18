@@ -37,6 +37,9 @@ let reauthInFlight = false
 let panelOverlaySuppressed = false
 let lastPanelBounds: { x: number; y: number; width: number; height: number } | null = null
 
+/** Prefixo em console.log → main sincroniza a rail (React Router usa pushState sem did-navigate-in-page). */
+const PANEL_NAV_CONSOLE_PREFIX = '[delidesk-panel-nav]'
+
 const EMBED_BOOTSTRAP = `
 (() => {
   try {
@@ -56,6 +59,23 @@ const EMBED_BOOTSTRAP = `
         '*::-webkit-scrollbar-corner{background:transparent!important;}'
       ].join('');
       document.head.appendChild(s);
+    }
+    if (!window.__delideskNavHooked) {
+      window.__delideskNavHooked = true;
+      const notify = () => {
+        try {
+          console.log('${PANEL_NAV_CONSOLE_PREFIX}', location.href);
+        } catch (e) {}
+      };
+      const wrap = (fn) => function () {
+        const ret = fn.apply(this, arguments);
+        notify();
+        return ret;
+      };
+      history.pushState = wrap(history.pushState.bind(history));
+      history.replaceState = wrap(history.replaceState.bind(history));
+      window.addEventListener('popstate', notify);
+      notify();
     }
   } catch (e) {}
   true;
