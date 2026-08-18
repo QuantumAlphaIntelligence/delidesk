@@ -78,6 +78,11 @@ const api = {
     ipcRenderer.on(IPC.PANEL_NAV_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC.PANEL_NAV_CHANGED, listener)
   },
+  onPanelReauthRequired: (cb: (reason?: string) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, reason?: string) => cb(reason)
+    ipcRenderer.on(IPC.PANEL_REAUTH_REQUIRED, listener)
+    return () => ipcRenderer.removeListener(IPC.PANEL_REAUTH_REQUIRED, listener)
+  },
   getAppVersion: () =>
     ipcRenderer.invoke(IPC.APP_GET_VERSION) as Promise<{ version: string; channel: string }>,
   checkForUpdates: () =>

@@ -10,7 +10,7 @@ import {
 import { getDelivaiSession } from './delivai-session'
 import type { PanelBounds, PanelMode } from '../shared/pdvai'
 import { IPC } from '../shared/ipc'
-import { getSession, isMockSession, patchSessionBranding } from './auth-store'
+import { clearSession, getSession, isMockSession, patchSessionBranding } from './auth-store'
 import { sanitizeCompanyName, sanitizeLogoUrl } from '../shared/branding'
 import { resolveLogoForShell } from './logo-cache'
 import {
@@ -19,6 +19,7 @@ import {
   type PanelSnapshot
 } from './agent-api'
 import {
+  clearPanelSnapshot,
   loadPanelSnapshot,
   savePanelSnapshot
 } from './panel-snapshot-store'
@@ -31,6 +32,7 @@ let contentLoaded = false
 /** Seed SSO em andamento — showPanel só anexa a view, não dispara outro loadURL. */
 let seeding = false
 let embedHooked = false
+let reauthInFlight = false
 
 const EMBED_BOOTSTRAP = `
 (() => {
@@ -126,6 +128,10 @@ function ensureView(): BrowserView {
 }
 
 function emitPanelNavFromUrl(url: string): void {
+  if (isPanelLoginUrl(url)) {
+    if (!seeding) forcePanelReauth('painel em /login')
+    return
+  }
   const mode = panelModeFromUrl(url) as PanelMode | null
   if (!mode) return
   if (mode === currentMode) return
@@ -133,6 +139,100 @@ function emitPanelNavFromUrl(url: string): void {
   const win = getMainWindow()
   if (win && !win.isDestroyed()) {
     win.webContents.send(IPC.PANEL_NAV_CHANGED, mode)
+  }
+}
+
+function isPanelLoginUrl(url: string): boolean {
+  try {
+    const path = new URL(url).pathname
+    return path === '/login' || path.startsWith('/login/')
+  } catch {
+    return false
+  }
+}
+
+/** Sem cookie/sessão do painel: volta à tela Entrar com DelivAI (não fica “Online” falso). */
+export function forcePanelReauth(reason: string): void {
+  if (reauthInFlight) return
+  reauthInFlight = true
+  console.warn('[panel] reauth required:', reason)
+  hidePanel()
+  clearSession()
+  clearPanelSnapshot()
+  void clearPanelSessionCookie().catch(() => undefined)
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send(IPC.PANEL_REAUTH_REQUIRED, reason)
+    win.webContents.send(IPC.AUTH_SESSION_CHANGED, null)
+  }
+  setTimeout(() => {
+    reauthInFlight = false
+  }, 2500)
+}
+
+async function clearPanelSessionCookie(): Promise<void> {
+  const origin = getPanelOrigin()
+  const ses = getDelivaiSession()
+  const cookies = await ses.cookies.get({ url: origin })
+  for (const c of cookies) {
+    if (c.name === 'delivai_session' || c.name.startsWith('delivai_')) {
+      await ses.cookies.remove(origin, c.name)
+    }
+  }
+}
+
+/** Grava cookie HttpOnly no partition do BrowserView (mesmo origin do site). */
+async function writePanelSessionCookie(snap: PanelSnapshot): Promise<void> {
+  const token = snap.panelSessionToken?.trim()
+  if (!token) return
+  const name = snap.panelSessionCookie?.trim() || 'delivai_session'
+  const origin = getPanelOrigin()
+  const secure = origin.startsWith('https:')
+  await getDelivaiSession().cookies.set({
+    url: origin,
+    name,
+    value: token,
+    path: '/',
+    httpOnly: true,
+    secure,
+    sameSite: 'lax',
+    expirationDate: Math.floor(Date.now() / 1000) + 86_400
+  })
+  console.info('[panel] session cookie set', { name, origin })
+}
+
+/**
+ * Garante token de sessão SEC-2 (API) + cookie no partition.
+ * Cache local sozinho não basta quando SESSION_AUTH está ligado.
+ */
+async function ensurePanelSessionCookie(snap: PanelSnapshot): Promise<PanelSnapshot> {
+  if (snap.panelSessionToken?.trim()) {
+    await writePanelSessionCookie(snap)
+    return snap
+  }
+  if (isMockSession(getSession())) {
+    return snap
+  }
+  try {
+    const fresh = await fetchPanelHydrate()
+    const merged: PanelSnapshot = {
+      ...snap,
+      ...fresh,
+      user: fresh.user || snap.user,
+      licenseModules: fresh.licenseModules ?? snap.licenseModules,
+      companyName: fresh.companyName ?? snap.companyName,
+      companyLogoUrl: fresh.companyLogoUrl ?? snap.companyLogoUrl
+    }
+    if (merged.panelSessionToken?.trim()) {
+      await writePanelSessionCookie(merged)
+      return merged
+    }
+    // API respondeu sem token (SESSION_AUTH off) — localStorage basta / dual header.
+    return merged
+  } catch (err) {
+    console.warn('[panel] panel-hydrate for cookie failed', err)
+    // Sessão do agente inválida ou AuthFilter bloqueando: não abrir Pedidos “manco”.
+    throw err
   }
 }
 
@@ -363,15 +463,23 @@ function snapshotFromAgentSession(): PanelSnapshot | null {
  */
 async function applyPanelSnapshot(snap: PanelSnapshot): Promise<void> {
   const v = ensureView()
-  const destPath = panelDestPath(snap)
+  let withCookie: PanelSnapshot
+  try {
+    withCookie = await ensurePanelSessionCookie(snap)
+  } catch (err) {
+    console.warn('[panel] sem crachá do painel — voltando ao login', err)
+    forcePanelReauth('sem cookie do painel')
+    return
+  }
+  const destPath = panelDestPath(withCookie)
   currentMode = destPath.startsWith('/dev') ? 'dev-home' : 'orders'
   const dest = getPanelPathUrl(destPath)
   const boot = `${getPanelOrigin()}/delidesk-sso?embed=delidesk&boot=1`
   seeding = true
   try {
-    savePanelSnapshot(snap)
+    savePanelSnapshot(withCookie)
     await safeLoadURL(v, boot)
-    await injectPanelSnapshot(v, snap)
+    await injectPanelSnapshot(v, withCookie)
     // Navega no mesmo origin já com delivai_user gravado (AuthContext lê no boot).
     await v.webContents.executeJavaScript(
       `window.location.replace(${JSON.stringify(dest)}); true;`,
@@ -380,13 +488,14 @@ async function applyPanelSnapshot(snap: PanelSnapshot): Promise<void> {
     await waitForLoad(v)
     if (!(await panelHasUser(v))) {
       console.warn('[panel] user missing after navigate — re-inject + reload')
-      await injectPanelSnapshot(v, snap)
+      await injectPanelSnapshot(v, withCookie)
       v.webContents.reload()
       await waitForLoad(v)
     }
     console.info('[panel] snapshot applied', {
       dest: destPath,
-      hasUser: await panelHasUser(v)
+      hasUser: await panelHasUser(v),
+      hasCookie: Boolean(withCookie.panelSessionToken)
     })
   } finally {
     contentLoaded = true
@@ -477,6 +586,7 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
         const ok = await ensurePanelHydrated()
         if (!ok) {
           console.warn('[panel] showPanel: sem sessão do painel')
+          forcePanelReauth('hydrate falhou')
           return
         }
         // Usa currentMode (pode ter mudado durante o hydrate).
@@ -527,6 +637,7 @@ export function reloadPanel(): void {
     const ok = await ensurePanelHydrated()
     if (!ok) {
       console.warn('[panel] reload: sem sessão do painel')
+      forcePanelReauth('reload sem sessão')
       return
     }
     // Reaplica snapshot (garante localStorage) e recarrega a rota atual.
