@@ -16,3 +16,5 @@ release
 # Gerado por bake-channel (não versionar)
 resources/channel.json
 tsconfig.*.tsbuildinfo
+
+electron-builder.override.json
