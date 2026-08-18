@@ -40,6 +40,8 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: DeliDesk
   include: build/installer.nsh
+  # Upgrade in-place (não apaga pin da barra sem necessidade)
+  deleteAppDataOnUninstall: false
   # Admin ajuda a criar a fila Spooler DeliDesk no pós-install
   allowElevation: true
 linux:

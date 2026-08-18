@@ -40,6 +40,17 @@ export default function App(): React.JSX.Element {
             }
           })
         })
+        const unsubReauth = window.delidesk.onPanelReauthRequired(() => {
+          setSession(null)
+          setLoggingIn(false)
+          setLoginError('Sessão do painel expirou. Entre de novo com DelivAI.')
+        })
+        // keep unsubReauth for cleanup
+        const prevUnsubSession = unsubSession
+        unsubSession = () => {
+          prevUnsubSession()
+          unsubReauth()
+        }
       } finally {
         setBooting(false)
       }

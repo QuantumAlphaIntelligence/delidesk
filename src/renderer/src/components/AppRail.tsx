@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { ShellRole } from '@shared/ipc'
 import { DeliDeskMark } from './DeliDeskMark'
+import { VersionUpdateCard } from './VersionUpdateCard'
 
 export type AppNavId =
   | 'orders'
@@ -47,7 +48,7 @@ type Props = {
   onLogout: () => void
 }
 
-type AppVersionInfo = { version: string; channel: string }
+type AppVersionInfo = { version: string; channel: string; packaged?: boolean }
 
 function IconBox({ children }: { children: ReactNode }): React.JSX.Element {
   return (
@@ -355,7 +356,6 @@ export function AppRail({
   onLogout
 }: Props): React.JSX.Element {
   const [appInfo, setAppInfo] = useState<AppVersionInfo | null>(null)
-  const [updateBusy, setUpdateBusy] = useState(false)
 
   useEffect(() => {
     void window.delidesk.getAppVersion().then(setAppInfo).catch(() => undefined)
@@ -544,6 +544,7 @@ export function AppRail({
             </span>
           ) : null}
         </div>
+        <VersionUpdateCard expanded={expanded} appInfo={appInfo} />
         <button
           type="button"
           title={

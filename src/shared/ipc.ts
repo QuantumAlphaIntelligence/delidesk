@@ -57,10 +57,14 @@ export const IPC = {
   PANEL_SHOW: 'panel:show',
   PANEL_HIDE: 'panel:hide',
   PANEL_SET_BOUNDS: 'panel:set-bounds',
+  /** Esconde BrowserView enquanto popover do shell (card versão) está aberto. */
+  PANEL_SET_OVERLAY_SUPPRESSED: 'panel:set-overlay-suppressed',
   PANEL_RELOAD: 'panel:reload',
   PANEL_OPEN_EXTERNAL: 'panel:open-external',
   /** BrowserView mudou de rota (ex.: Abrir Entregas) → sincroniza rail. */
   PANEL_NAV_CHANGED: 'panel:nav-changed',
+  /** Painel embutido sem sessão — shell deve voltar ao login Entrar com DelivAI. */
+  PANEL_REAUTH_REQUIRED: 'panel:reauth-required',
   APP_GET_VERSION: 'app:get-version',
   UPDATE_CHECK: 'update:check',
   PDVAI_GET_STATE: 'pdvai:get-state',
@@ -73,9 +77,14 @@ export const IPC = {
   UPDATE_STATUS: 'update:status'
 } as const
 
+/** Urgência da atualização (card da sidebar + toast). */
+export type UpdateUrgency = 'optional' | 'mandatory'
+
 export type UpdateUiStatus =
   | { state: 'idle' }
   | { state: 'checking' }
-  | { state: 'available'; version: string }
-  | { state: 'downloaded'; version: string }
+  /** App na versão do feed — card verde. */
+  | { state: 'up_to_date' }
+  | { state: 'available'; version: string; urgency: UpdateUrgency }
+  | { state: 'downloaded'; version: string; urgency: UpdateUrgency }
   | { state: 'error'; message: string }

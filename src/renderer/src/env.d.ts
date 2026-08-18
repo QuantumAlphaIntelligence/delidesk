@@ -29,10 +29,12 @@ export type DelideskApi = {
   showPanel: (mode: PanelMode, bounds: PanelBounds) => Promise<{ ok: boolean }>
   hidePanel: () => Promise<{ ok: boolean }>
   setPanelBounds: (bounds: PanelBounds) => Promise<{ ok: boolean }>
+  setPanelOverlaySuppressed: (suppressed: boolean) => Promise<{ ok: boolean }>
   reloadPanel: () => Promise<{ ok: boolean }>
   openPanelExternal: (mode: PanelMode) => Promise<{ ok: boolean }>
   onPanelNavChanged: (cb: (mode: PanelMode) => void) => () => void
-  getAppVersion: () => Promise<{ version: string; channel: string }>
+  onPanelReauthRequired: (cb: (reason?: string) => void) => () => void
+  getAppVersion: () => Promise<{ version: string; channel: string; packaged: boolean }>
   checkForUpdates: () => Promise<{ ok: boolean }>
   getPdvaiState: () => Promise<PdvaiState>
   createPdvaiOrder: (itemId: string, qty?: number) => Promise<PdvaiState>

@@ -70,6 +70,8 @@ const api = {
   hidePanel: () => ipcRenderer.invoke(IPC.PANEL_HIDE) as Promise<{ ok: boolean }>,
   setPanelBounds: (bounds: PanelBounds) =>
     ipcRenderer.invoke(IPC.PANEL_SET_BOUNDS, bounds) as Promise<{ ok: boolean }>,
+  setPanelOverlaySuppressed: (suppressed: boolean) =>
+    ipcRenderer.invoke(IPC.PANEL_SET_OVERLAY_SUPPRESSED, suppressed) as Promise<{ ok: boolean }>,
   reloadPanel: () => ipcRenderer.invoke(IPC.PANEL_RELOAD) as Promise<{ ok: boolean }>,
   openPanelExternal: (mode: PanelMode) =>
     ipcRenderer.invoke(IPC.PANEL_OPEN_EXTERNAL, mode) as Promise<{ ok: boolean }>,
@@ -78,8 +80,17 @@ const api = {
     ipcRenderer.on(IPC.PANEL_NAV_CHANGED, listener)
     return () => ipcRenderer.removeListener(IPC.PANEL_NAV_CHANGED, listener)
   },
+  onPanelReauthRequired: (cb: (reason?: string) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, reason?: string) => cb(reason)
+    ipcRenderer.on(IPC.PANEL_REAUTH_REQUIRED, listener)
+    return () => ipcRenderer.removeListener(IPC.PANEL_REAUTH_REQUIRED, listener)
+  },
   getAppVersion: () =>
-    ipcRenderer.invoke(IPC.APP_GET_VERSION) as Promise<{ version: string; channel: string }>,
+    ipcRenderer.invoke(IPC.APP_GET_VERSION) as Promise<{
+      version: string
+      channel: string
+      packaged: boolean
+    }>,
   checkForUpdates: () =>
     ipcRenderer.invoke(IPC.UPDATE_CHECK) as Promise<{ ok: boolean }>,
 
