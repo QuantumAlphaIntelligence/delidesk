@@ -48,7 +48,7 @@ type Props = {
   onLogout: () => void
 }
 
-type AppVersionInfo = { version: string; channel: string }
+type AppVersionInfo = { version: string; channel: string; packaged?: boolean }
 
 function IconBox({ children }: { children: ReactNode }): React.JSX.Element {
   return (

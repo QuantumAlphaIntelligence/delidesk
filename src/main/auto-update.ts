@@ -127,8 +127,8 @@ export function startAutoUpdater(getMainWindow: () => BrowserWindow | null): voi
 /** Disparo manual (card Versão na sidebar). */
 export function checkForUpdatesNow(getMainWindow: () => BrowserWindow | null): void {
   if (!app.isPackaged) {
-    // Em dev: mostra “atualizado” pra validar o card verde
-    emit(getMainWindow(), { state: 'up_to_date' })
+    // Card da UI trata unpackaged; não dispara electron-updater.
+    emit(getMainWindow(), { state: 'idle' })
     return
   }
   if (!started) {
