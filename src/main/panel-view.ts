@@ -37,9 +37,6 @@ let reauthInFlight = false
 let panelOverlaySuppressed = false
 let lastPanelBounds: { x: number; y: number; width: number; height: number } | null = null
 
-/** Prefixo em console.log → main sincroniza a rail (React Router usa pushState sem did-navigate-in-page). */
-const PANEL_NAV_CONSOLE_PREFIX = '[delidesk-panel-nav]'
-
 const EMBED_BOOTSTRAP = `
 (() => {
   try {

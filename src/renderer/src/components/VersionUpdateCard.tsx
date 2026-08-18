@@ -123,12 +123,12 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
 
   useEffect(() => {
     if (!open) {
-      void window.delidesk.setPanelOverlaySuppressed(false)
+      void window.delidesk.setPanelOverlaySuppressed?.(false)
       return
     }
-    void window.delidesk.setPanelOverlaySuppressed(true)
+    void window.delidesk.setPanelOverlaySuppressed?.(true)
     return () => {
-      void window.delidesk.setPanelOverlaySuppressed(false)
+      void window.delidesk.setPanelOverlaySuppressed?.(false)
     }
   }, [open])
 
