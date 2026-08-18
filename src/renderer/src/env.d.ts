@@ -32,6 +32,7 @@ export type DelideskApi = {
   reloadPanel: () => Promise<{ ok: boolean }>
   openPanelExternal: (mode: PanelMode) => Promise<{ ok: boolean }>
   onPanelNavChanged: (cb: (mode: PanelMode) => void) => () => void
+  onPanelReauthRequired: (cb: (reason?: string) => void) => () => void
   getAppVersion: () => Promise<{ version: string; channel: string }>
   checkForUpdates: () => Promise<{ ok: boolean }>
   getPdvaiState: () => Promise<PdvaiState>

@@ -311,12 +311,23 @@ export type PanelSnapshot = {
   licenseModules?: Record<string, unknown>
   companyName?: string
   companyLogoUrl?: string | null
+  /** Token opaco Redis (SEC-2) — Electron grava cookie no origin do painel. */
+  panelSessionToken?: string
+  panelSessionCookie?: string
 }
 
 function parsePanelSnapshot(data: JsonMap): PanelSnapshot | null {
   const user = data.user
   if (!user || typeof user !== 'object') return null
   const modules = data.license_modules
+  const token =
+    typeof data.panel_session_token === 'string'
+      ? data.panel_session_token.trim()
+      : ''
+  const cookieName =
+    typeof data.panel_session_cookie === 'string'
+      ? data.panel_session_cookie.trim()
+      : ''
   return {
     user: user as Record<string, unknown>,
     licenseModules:
@@ -326,7 +337,9 @@ function parsePanelSnapshot(data: JsonMap): PanelSnapshot | null {
     companyName:
       typeof data.company_name === 'string' ? data.company_name : undefined,
     companyLogoUrl:
-      typeof data.company_logo_url === 'string' ? data.company_logo_url : null
+      typeof data.company_logo_url === 'string' ? data.company_logo_url : null,
+    panelSessionToken: token || undefined,
+    panelSessionCookie: cookieName || undefined
   }
 }
 

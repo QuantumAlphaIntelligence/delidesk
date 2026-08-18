@@ -61,6 +61,8 @@ export const IPC = {
   PANEL_OPEN_EXTERNAL: 'panel:open-external',
   /** BrowserView mudou de rota (ex.: Abrir Entregas) → sincroniza rail. */
   PANEL_NAV_CHANGED: 'panel:nav-changed',
+  /** Painel embutido sem sessão — shell deve voltar ao login Entrar com DelivAI. */
+  PANEL_REAUTH_REQUIRED: 'panel:reauth-required',
   APP_GET_VERSION: 'app:get-version',
   UPDATE_CHECK: 'update:check',
   PDVAI_GET_STATE: 'pdvai:get-state',
