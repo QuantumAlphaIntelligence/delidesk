@@ -57,6 +57,8 @@ export const IPC = {
   PANEL_SHOW: 'panel:show',
   PANEL_HIDE: 'panel:hide',
   PANEL_SET_BOUNDS: 'panel:set-bounds',
+  /** Esconde BrowserView enquanto popover do shell (card versão) está aberto. */
+  PANEL_SET_OVERLAY_SUPPRESSED: 'panel:set-overlay-suppressed',
   PANEL_RELOAD: 'panel:reload',
   PANEL_OPEN_EXTERNAL: 'panel:open-external',
   /** BrowserView mudou de rota (ex.: Abrir Entregas) → sincroniza rail. */

@@ -70,6 +70,7 @@ import {
   reloadPanel,
   seedPanelSession,
   setPanelBounds,
+  setPanelOverlaySuppressed,
   showPanel
 } from './panel-view'
 import {
@@ -348,6 +349,10 @@ function registerIpc(): void {
   })
   ipcMain.handle(IPC.PANEL_SET_BOUNDS, (_e, bounds: PanelBounds) => {
     setPanelBounds(bounds)
+    return { ok: true }
+  })
+  ipcMain.handle(IPC.PANEL_SET_OVERLAY_SUPPRESSED, (_e, suppressed: boolean) => {
+    setPanelOverlaySuppressed(Boolean(suppressed))
     return { ok: true }
   })
   ipcMain.handle(IPC.PANEL_RELOAD, () => {
