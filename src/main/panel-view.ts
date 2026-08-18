@@ -33,6 +33,9 @@ let contentLoaded = false
 let seeding = false
 let embedHooked = false
 let reauthInFlight = false
+/** Popover do shell (card versão) — BrowserView some temporariamente. */
+let panelOverlaySuppressed = false
+let lastPanelBounds: { x: number; y: number; width: number; height: number } | null = null
 
 const EMBED_BOOTSTRAP = `
 (() => {
@@ -575,6 +578,13 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
     width: Math.max(100, Math.round(bounds.width)),
     height: Math.max(100, Math.round(bounds.height))
   })
+  lastPanelBounds = {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
+    width: Math.max(100, Math.round(bounds.width)),
+    height: Math.max(100, Math.round(bounds.height))
+  }
+  panelOverlaySuppressed = false
   v.setAutoResize({ width: true, height: true })
   visible = true
 
@@ -615,12 +625,30 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
 
 export function setPanelBounds(bounds: PanelBounds): void {
   if (!view || !visible) return
-  view.setBounds({
+  lastPanelBounds = {
     x: Math.round(bounds.x),
     y: Math.round(bounds.y),
     width: Math.max(100, Math.round(bounds.width)),
     height: Math.max(100, Math.round(bounds.height))
-  })
+  }
+  if (panelOverlaySuppressed) return
+  view.setBounds(lastPanelBounds)
+}
+
+/**
+ * Esconde temporariamente o BrowserView (bounds 0) para popovers do shell
+ * (ex.: card de versão) aparecerem à direita da rail sem ficarem cobertos.
+ */
+export function setPanelOverlaySuppressed(suppressed: boolean): void {
+  panelOverlaySuppressed = suppressed
+  if (!view || !visible) return
+  if (suppressed) {
+    view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+    return
+  }
+  if (lastPanelBounds) {
+    view.setBounds(lastPanelBounds)
+  }
 }
 
 export function hidePanel(): void {
@@ -629,6 +657,7 @@ export function hidePanel(): void {
     win.removeBrowserView(view)
   }
   visible = false
+  panelOverlaySuppressed = false
 }
 
 export function reloadPanel(): void {

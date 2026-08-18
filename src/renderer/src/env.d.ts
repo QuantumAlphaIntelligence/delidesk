@@ -29,6 +29,7 @@ export type DelideskApi = {
   showPanel: (mode: PanelMode, bounds: PanelBounds) => Promise<{ ok: boolean }>
   hidePanel: () => Promise<{ ok: boolean }>
   setPanelBounds: (bounds: PanelBounds) => Promise<{ ok: boolean }>
+  setPanelOverlaySuppressed: (suppressed: boolean) => Promise<{ ok: boolean }>
   reloadPanel: () => Promise<{ ok: boolean }>
   openPanelExternal: (mode: PanelMode) => Promise<{ ok: boolean }>
   onPanelNavChanged: (cb: (mode: PanelMode) => void) => () => void

@@ -97,18 +97,18 @@ const toneClass: Record<string, string> = {
   neutral: 'border-white/15 bg-white/5 text-white/80'
 }
 
-const CARD_W = 288
+const CARD_W = 300
 
 /**
- * Card de versão/atualização (sidebar) — verde / amarelo / vermelho + botão Atualizar.
- * Portal no body: a rail tem overflow-hidden e cortava o popover.
+ * Card de versão à direita da rail (fora da sidebar).
+ * Enquanto aberto, o BrowserView do painel é suprimido — senão cobria o HTML.
  */
 export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<UpdateUiStatus>({ state: 'idle' })
   const [busy, setBusy] = useState(false)
   const [installing, setInstalling] = useState(false)
-  const [cardPos, setCardPos] = useState({ top: 8, left: 72 })
+  const [cardPos, setCardPos] = useState({ top: 8, left: 80 })
   const btnRef = useRef<HTMLButtonElement>(null)
   const cardRef = useRef<HTMLDivElement>(null)
 
@@ -121,27 +121,45 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
     return window.delidesk.onUpdateStatus(setStatus)
   }, [])
 
+  useEffect(() => {
+    if (!open) {
+      void window.delidesk.setPanelOverlaySuppressed(false)
+      return
+    }
+    void window.delidesk.setPanelOverlaySuppressed(true)
+    return () => {
+      void window.delidesk.setPanelOverlaySuppressed(false)
+    }
+  }, [open])
+
   useLayoutEffect(() => {
     if (!open || !btnRef.current) return
     const place = (): void => {
-      const rect = btnRef.current!.getBoundingClientRect()
-      const gap = 8
-      const estimatedH = 220
-      let left = rect.right + gap
-      let top = Math.min(
-        Math.max(8, rect.bottom - estimatedH),
-        window.innerHeight - estimatedH - 8
-      )
+      const btn = btnRef.current!
+      const rect = btn.getBoundingClientRect()
+      const railEl = btn.closest('aside')
+      const rail = railEl?.getBoundingClientRect() ?? rect
+      const gap = 10
+      const measuredH = cardRef.current?.offsetHeight || 210
+
+      // Sempre à direita da rail (fora da sidebar), sobre a área do painel.
+      let left = rail.right + gap
       if (left + CARD_W > window.innerWidth - 8) {
-        left = Math.max(8, rect.left - CARD_W - gap)
+        left = Math.max(8, window.innerWidth - CARD_W - 8)
       }
-      if (left < 8) left = 8
+
+      let top = rect.bottom - measuredH
+      top = Math.min(Math.max(8, top), window.innerHeight - measuredH - 8)
       setCardPos({ top, left })
     }
     place()
+    const raf = requestAnimationFrame(place)
     window.addEventListener('resize', place)
-    return () => window.removeEventListener('resize', place)
-  }, [open, expanded])
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener('resize', place)
+    }
+  }, [open, expanded, status.state, version, channel])
 
   useEffect(() => {
     if (!open) return
@@ -178,7 +196,7 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
           <div
             ref={cardRef}
             style={{ top: cardPos.top, left: cardPos.left, width: CARD_W }}
-            className="fixed z-[99999] rounded-xl border border-white/15 bg-[#0a1620] p-3 shadow-2xl shadow-black/50"
+            className="fixed z-[99999] rounded-xl border border-white/15 bg-[#0a1620] p-3 shadow-2xl shadow-black/60"
             role="dialog"
             aria-label="Atualização do DeliDesk"
             onMouseEnter={() => setOpen(true)}

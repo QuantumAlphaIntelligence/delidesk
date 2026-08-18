@@ -70,6 +70,8 @@ const api = {
   hidePanel: () => ipcRenderer.invoke(IPC.PANEL_HIDE) as Promise<{ ok: boolean }>,
   setPanelBounds: (bounds: PanelBounds) =>
     ipcRenderer.invoke(IPC.PANEL_SET_BOUNDS, bounds) as Promise<{ ok: boolean }>,
+  setPanelOverlaySuppressed: (suppressed: boolean) =>
+    ipcRenderer.invoke(IPC.PANEL_SET_OVERLAY_SUPPRESSED, suppressed) as Promise<{ ok: boolean }>,
   reloadPanel: () => ipcRenderer.invoke(IPC.PANEL_RELOAD) as Promise<{ ok: boolean }>,
   openPanelExternal: (mode: PanelMode) =>
     ipcRenderer.invoke(IPC.PANEL_OPEN_EXTERNAL, mode) as Promise<{ ok: boolean }>,
