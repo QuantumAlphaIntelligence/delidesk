@@ -31,11 +31,13 @@ Identidade = **versão + canal + API**.
 
 | Sinal | Onde |
 |-------|------|
-| Versão do app | `package.json` / `app.getVersion()` no build (aparece no toast de update: “DeliDesk X.Y.Z”) |
+| Versão do app | `package.json` no build / rail do app |
 | Canal | `channel.json` embutido (`sandbox` \| `prod`) |
 | API | URL bake do instalador / `.env` do canal (`getBackendBaseUrl()`) |
 | Release publicada | GitHub Releases do repo `delidesk` — tag + `latest.yml` do canal |
 | Download “latest” no painel | Backend `GET /webhook/public/delidesk-download?channel=…` escolhe a release certa (prod = não-prerelease; sandbox = prerelease) |
+
+`npm run dev`: o número na rail lê o `package.json` do repo (não sobe a cada save). **Verificar** / **Atualizar agora** no card são prévia visual — download real só no `.exe`. Sem Release Windows, o instalador continua na versão antiga.
 
 **Suporte / dúvida “qual versão o cliente está?”**
 

@@ -27,6 +27,7 @@ function applyChannelUserDataIsolation(): void {
 applyChannelUserDataIsolation()
 import os from 'os'
 import { IPC, PROTOCOL } from '../shared/ipc'
+import { resolveDelideskVersion } from './app-version'
 import {
   generatePkce,
   getAuthAuthorizeUrl,
@@ -382,7 +383,7 @@ function registerIpc(): void {
     return { ok: true }
   })
   ipcMain.handle(IPC.APP_GET_VERSION, () => ({
-    version: app.getVersion(),
+    version: resolveDelideskVersion(),
     packaged: app.isPackaged,
     channel:
       (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox').toLowerCase() ===

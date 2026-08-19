@@ -390,7 +390,11 @@ export function AppRail({
   return (
     <aside
       onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      onMouseLeave={(e) => {
+        const next = e.relatedTarget
+        if (next instanceof Element && next.closest('[data-delidesk-version-card]')) return
+        setExpanded(false)
+      }}
       className={`relative z-30 flex h-full shrink-0 flex-col overflow-hidden border-r border-white/10
         bg-slate-950/90 backdrop-blur-md transition-[width] duration-200 ease-out
         ${expanded ? 'w-56 shadow-[18px_0_48px_-16px_rgba(0,0,0,0.65)]' : 'w-[4.75rem]'}`}
