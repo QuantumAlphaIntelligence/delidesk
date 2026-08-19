@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
- * Após o NSIS: mantém o .exe versionado (ex.: DeliDesk-Setup-prod-0.2.10.exe)
- * como artefato oficial do download — evita "DeliDesk-Setup-prod (1)" no Salvar como.
- * latest.yml continua apontando para o nome versionado (electron-updater).
+ * Após o NSIS: valida o .exe curto (DeliDesk-0.2.11.exe) e alinha latest.yml.
+ * Legado DeliDesk-Setup-{channel}-*.exe ainda é aceito se existir.
  *
  * Uso: node scripts/prepare-release-assets.mjs sandbox|prod
  */
@@ -23,34 +22,38 @@ if (!existsSync(releaseDir)) {
   process.exit(1)
 }
 
-const versionedPrefix = `DeliDesk-Setup-${channel}-`
 const files = readdirSync(releaseDir)
-
-const versionedExe = files.find(
-  (f) => f.startsWith(versionedPrefix) && f.endsWith('.exe') && !f.endsWith('.blockmap')
+const shortExe = files.find((f) => /^DeliDesk-\d+\.\d+\.\d+\.exe$/i.test(f))
+const legacyExe = files.find(
+  (f) =>
+    f.startsWith(`DeliDesk-Setup-${channel}-`) &&
+    f.endsWith('.exe') &&
+    !f.endsWith('.blockmap')
 )
+const versionedExe = shortExe || legacyExe
 if (!versionedExe) {
-  console.error(`Nenhum ${versionedPrefix}*.exe em release/`)
+  console.error(
+    `Nenhum DeliDesk-x.y.z.exe (nem legado DeliDesk-Setup-${channel}-*.exe) em release/`
+  )
   process.exit(1)
 }
 
 console.log(`Download/update asset: ${versionedExe}`)
 
-const ymlName = 'latest.yml'
-const ymlPath = join(releaseDir, ymlName)
+const ymlPath = join(releaseDir, 'latest.yml')
 if (existsSync(ymlPath)) {
-  // Garante que o feed usa o nome versionado (não o alias sem versão).
   let yml = readFileSync(ymlPath, 'utf8')
-  const stableAlias = `DeliDesk-Setup-${channel}.exe`
-  if (yml.includes(stableAlias)) {
-    yml = yml.replace(new RegExp(stableAlias.replace(/\./g, '\\.'), 'g'), versionedExe)
+  // Remove aliases antigos sem versão (Setup-prod.exe) apontando pro versionado.
+  const legacyStable = `DeliDesk-Setup-${channel}.exe`
+  if (yml.includes(legacyStable)) {
+    yml = yml.replace(new RegExp(legacyStable.replace(/\./g, '\\.'), 'g'), versionedExe)
     writeFileSync(ymlPath, yml, 'utf8')
-    console.log(`Rewrote ${ymlName} paths → ${versionedExe}`)
+    console.log(`Rewrote latest.yml paths → ${versionedExe}`)
   } else {
-    console.log(`${ymlName} já aponta para artefato versionado`)
+    console.log('latest.yml já aponta para artefato versionado')
   }
 } else {
-  console.warn(`Aviso: ${ymlName} não gerado — confira publish no electron-builder`)
+  console.warn('Aviso: latest.yml não gerado — confira publish no electron-builder')
 }
 
 console.log('Release assets prontos em release/')

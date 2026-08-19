@@ -37,6 +37,9 @@ let reauthInFlight = false
 let panelOverlaySuppressed = false
 let lastPanelBounds: { x: number; y: number; width: number; height: number } | null = null
 
+/** Prefixo em console.log → main sincroniza a rail (React Router usa pushState sem did-navigate-in-page). */
+const PANEL_NAV_CONSOLE_PREFIX = '[delidesk-panel-nav]'
+
 const EMBED_BOOTSTRAP = `
 (() => {
   try {
@@ -136,6 +139,15 @@ function ensureView(): BrowserView {
     })
     view.webContents.on('did-navigate', (_e, url) => {
       emitPanelNavFromUrl(url)
+    })
+    // pushState/replaceState do painel — Electron às vezes não emite did-navigate-in-page.
+    view.webContents.on('console-message', (event: { message?: string }, ...rest: unknown[]) => {
+      const legacyMsg = typeof rest[1] === 'string' ? rest[1] : ''
+      const msg = String(event?.message || legacyMsg || '')
+      if (!msg.includes(PANEL_NAV_CONSOLE_PREFIX)) return
+      const idx = msg.indexOf(PANEL_NAV_CONSOLE_PREFIX)
+      const url = msg.slice(idx + PANEL_NAV_CONSOLE_PREFIX.length).trim()
+      if (url) emitPanelNavFromUrl(url)
     })
     // BrowserView também dispara page-title-updated na janela pai (virava “DeliDesk”/Pedidos).
     view.webContents.on('page-title-updated', (e) => {

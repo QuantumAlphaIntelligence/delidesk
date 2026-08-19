@@ -9,6 +9,15 @@ type Props = {
   appInfo: AppVersionInfo | null
 }
 
+function bumpPreviewPatch(version: string): string {
+  const parts = String(version || '0.0.0')
+    .split('.')
+    .map((n) => Number.parseInt(n, 10) || 0)
+  while (parts.length < 3) parts.push(0)
+  parts[2] += 1
+  return parts.join('.')
+}
+
 function toneFromStatus(
   status: UpdateUiStatus,
   packaged: boolean
@@ -20,13 +29,34 @@ function toneFromStatus(
   canCheck: boolean
 } {
   if (!packaged) {
+    if (status.state === 'checking') {
+      return {
+        tone: 'neutral',
+        label: 'Verificando…',
+        detail: 'Prévia do instalador — no .exe isto consulta o feed de verdade.',
+        canInstall: false,
+        canCheck: false
+      }
+    }
+    if (status.state === 'downloaded' || status.state === 'available') {
+      return {
+        tone: status.urgency === 'mandatory' ? 'mandatory' : 'optional',
+        label:
+          status.urgency === 'mandatory'
+            ? 'Atualização obrigatória pronta'
+            : 'Atualização pronta',
+        detail: `Prévia: v${status.version || '…'} como no .exe. Atualizar agora só reinicia de verdade no instalador.`,
+        canInstall: true,
+        canCheck: true
+      }
+    }
     return {
-      tone: 'neutral',
-      label: 'Modo desenvolvimento',
+      tone: 'optional',
+      label: 'Prévia das atualizações',
       detail:
-        'A versão vem do package.json. Atualização automática só no instalador (.exe) sandbox/prod.',
-      canInstall: false,
-      canCheck: false
+        'No .exe sandbox/prod: Verificar consulta o feed e Atualizar agora instala. Aqui é o mesmo visual — não baixa nem reinicia.',
+      canInstall: true,
+      canCheck: true
     }
   }
   switch (status.state) {
@@ -162,6 +192,23 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
   }, [open, expanded, status.state, version, channel])
 
   useEffect(() => {
+    if (!expanded) setOpen(false)
+  }, [expanded])
+
+  useEffect(() => {
+    const close = (): void => setOpen(false)
+    const onVis = (): void => {
+      if (document.hidden) close()
+    }
+    window.addEventListener('blur', close)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.removeEventListener('blur', close)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!open) return
     const onDoc = (e: MouseEvent): void => {
       const t = e.target as Node
@@ -175,7 +222,19 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
   const ui = toneFromStatus(status, packaged)
 
   const runCheck = (): void => {
-    if (!packaged) return
+    if (!packaged) {
+      setBusy(true)
+      setStatus({ state: 'checking' })
+      window.setTimeout(() => {
+        setStatus({
+          state: 'downloaded',
+          version: bumpPreviewPatch(version),
+          urgency: 'optional'
+        })
+        setBusy(false)
+      }, 700)
+      return
+    }
     setBusy(true)
     void window.delidesk
       .checkForUpdates()
@@ -184,6 +243,14 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
   }
 
   const runInstall = (): void => {
+    if (!packaged) {
+      setInstalling(true)
+      window.setTimeout(() => {
+        setInstalling(false)
+        setStatus({ state: 'idle' })
+      }, 600)
+      return
+    }
     setInstalling(true)
     void window.delidesk.installUpdate().then((res) => {
       if (!res.ok) setInstalling(false)
@@ -197,10 +264,15 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
             ref={cardRef}
             style={{ top: cardPos.top, left: cardPos.left, width: CARD_W }}
             className="fixed z-[99999] rounded-xl border border-white/15 bg-[#0a1620] p-3 shadow-2xl shadow-black/60"
+            data-delidesk-version-card=""
             role="dialog"
             aria-label="Atualização do DeliDesk"
             onMouseEnter={() => setOpen(true)}
-            onMouseLeave={() => setOpen(false)}
+            onMouseLeave={(e) => {
+              const next = e.relatedTarget
+              if (next instanceof Element && next.closest('aside')) return
+              setOpen(false)
+            }}
           >
             <p className="text-[11px] font-medium uppercase tracking-wide text-white/45">
               DeliDesk · {channel}

@@ -9,8 +9,8 @@
 
 | Canal | Branch Git | Artefato | GitHub Release | Backend que o app fala | Quem usa |
 |-------|------------|----------|----------------|------------------------|----------|
-| **sandbox** | `develop` | `DeliDesk-Setup-sandbox-*.exe` | **prerelease** | API **test** (`:staging`) | Leo / homologação |
-| **prod** | `main` | `DeliDesk-Setup-prod-*.exe` | release **estável** (não prerelease) | API **produção** | Cliente da loja |
+| **sandbox** | `develop` | `DeliDesk-*.exe` (ex.: `DeliDesk-0.2.11.exe`) | **prerelease** | API **test** (`:staging`) | Leo / homologação |
+| **prod** | `main` | `DeliDesk-*.exe` | release **estável** (não prerelease) | API **produção** | Cliente da loja |
 
 - O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL`).
 - Feed de update: `{BACKEND}/webhook/public/delidesk-update/{sandbox|prod}`.
@@ -31,11 +31,13 @@ Identidade = **versão + canal + API**.
 
 | Sinal | Onde |
 |-------|------|
-| Versão do app | `package.json` / `app.getVersion()` no build (aparece no toast de update: “DeliDesk X.Y.Z”) |
+| Versão do app | `package.json` no build / rail do app |
 | Canal | `channel.json` embutido (`sandbox` \| `prod`) |
 | API | URL bake do instalador / `.env` do canal (`getBackendBaseUrl()`) |
 | Release publicada | GitHub Releases do repo `delidesk` — tag + `latest.yml` do canal |
 | Download “latest” no painel | Backend `GET /webhook/public/delidesk-download?channel=…` escolhe a release certa (prod = não-prerelease; sandbox = prerelease) |
+
+`npm run dev`: o número na rail lê o `package.json` do repo (não sobe a cada save). **Verificar** / **Atualizar agora** no card são prévia visual — download real só no `.exe`. Sem Release Windows, o instalador continua na versão antiga.
 
 **Suporte / dúvida “qual versão o cliente está?”**
 
