@@ -46,7 +46,7 @@ const config = {
   win: {
     icon: 'icon.png',
     target: [{ target: 'nsis', arch: ['x64'] }],
-    artifactName: `DeliDesk-Setup-${channel}-\${version}.\${ext}`,
+    artifactName: `DeliDesk-\${version}.\${ext}`,
   },
   nsis: {
     oneClick: false,

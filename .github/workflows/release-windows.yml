@@ -95,10 +95,10 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: DeliDesk-Setup-${{ steps.meta.outputs.channel }}-${{ steps.meta.outputs.version }}
+          name: DeliDesk-${{ steps.meta.outputs.channel }}-${{ steps.meta.outputs.version }}
           path: |
-            release/DeliDesk-Setup-*.exe
-            release/DeliDesk-Setup-*.exe.blockmap
+            release/DeliDesk-*.exe
+            release/DeliDesk-*.exe.blockmap
             release/latest.yml
           if-no-files-found: error
 
@@ -111,8 +111,8 @@ jobs:
           tag_name: v${{ steps.meta.outputs.version }}
           name: DeliDesk v${{ steps.meta.outputs.version }} (${{ steps.meta.outputs.channel }})
           files: |
-            release/DeliDesk-Setup-*.exe
-            release/DeliDesk-Setup-*.exe.blockmap
+            release/DeliDesk-*.exe
+            release/DeliDesk-*.exe.blockmap
             release/latest.yml
           generate_release_notes: true
           prerelease: ${{ steps.meta.outputs.channel == 'sandbox' }}

@@ -9,8 +9,8 @@
 
 | Canal | Branch Git | Artefato | GitHub Release | Backend que o app fala | Quem usa |
 |-------|------------|----------|----------------|------------------------|----------|
-| **sandbox** | `develop` | `DeliDesk-Setup-sandbox-*.exe` | **prerelease** | API **test** (`:staging`) | Leo / homologação |
-| **prod** | `main` | `DeliDesk-Setup-prod-*.exe` | release **estável** (não prerelease) | API **produção** | Cliente da loja |
+| **sandbox** | `develop` | `DeliDesk-*.exe` (ex.: `DeliDesk-0.2.11.exe`) | **prerelease** | API **test** (`:staging`) | Leo / homologação |
+| **prod** | `main` | `DeliDesk-*.exe` | release **estável** (não prerelease) | API **produção** | Cliente da loja |
 
 - O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL`).
 - Feed de update: `{BACKEND}/webhook/public/delidesk-update/{sandbox|prod}`.
