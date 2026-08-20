@@ -25,11 +25,10 @@ function decrypt(buf: Buffer): string {
   return buf.toString('utf8')
 }
 
-/** Cache local do snapshot do painel — permite reopen/offline sem novo OAuth.
- * Não persiste panel_session_token (opaco Redis) — renovado via panel-hydrate. */
+/** Cache local do snapshot do painel — reopen sem novo OAuth.
+ * Token Redis (24h) fica cifrado no userData para regravar o cookie no BrowserView. */
 export function savePanelSnapshot(snap: PanelSnapshot): void {
-  const { panelSessionToken: _t, panelSessionCookie: _c, ...rest } = snap
-  writeFileSync(filePath(), encrypt(JSON.stringify(rest)))
+  writeFileSync(filePath(), encrypt(JSON.stringify(snap)))
 }
 
 export function loadPanelSnapshot(): PanelSnapshot | null {

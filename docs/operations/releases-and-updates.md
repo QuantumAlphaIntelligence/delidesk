@@ -37,7 +37,7 @@ Identidade = **versão + canal + API**.
 | Release publicada | GitHub Releases do repo `delidesk` — tag + `latest.yml` do canal |
 | Download “latest” no painel | Backend `GET /webhook/public/delidesk-download?channel=…` escolhe a release certa (prod = não-prerelease; sandbox = prerelease) |
 
-`npm run dev`: o número na rail lê o `package.json` do repo (não sobe a cada save). **Verificar** / **Atualizar agora** no card são prévia visual — download real só no `.exe`. Sem Release Windows, o instalador continua na versão antiga.
+`npm run dev`: o número na rail lê o `package.json` do repo (não inventa patch). **Verificar** no card confirma essa versão. Download / **Atualizar agora** só no `.exe`. Sem Release Windows, o instalador continua na versão antiga.
 
 **Suporte / dúvida “qual versão o cliente está?”**
 

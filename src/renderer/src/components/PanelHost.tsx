@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef } from 'react'
 import type { PanelMode } from '@shared/pdvai'
 
 type Props = {
@@ -59,15 +59,10 @@ export function PanelHost({ mode, online }: Props): React.JSX.Element {
       ro.disconnect()
       window.removeEventListener('resize', syncBounds)
       window.removeEventListener('transitionend', onTransition)
-      void window.delidesk.hidePanel()
+      // Não hidePanel aqui: StrictMode e troca Pedidos↔Conversas desmontavam
+      // o BrowserView (tela vazia) e o painel ia a /login.
     }
   }, [mode, online])
-
-  useEffect(() => {
-    return () => {
-      void window.delidesk.hidePanel()
-    }
-  }, [])
 
   if (!online) {
     return (
