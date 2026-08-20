@@ -9,15 +9,6 @@ type Props = {
   appInfo: AppVersionInfo | null
 }
 
-function bumpPreviewPatch(version: string): string {
-  const parts = String(version || '0.0.0')
-    .split('.')
-    .map((n) => Number.parseInt(n, 10) || 0)
-  while (parts.length < 3) parts.push(0)
-  parts[2] += 1
-  return parts.join('.')
-}
-
 function toneFromStatus(
   status: UpdateUiStatus,
   packaged: boolean
@@ -28,34 +19,23 @@ function toneFromStatus(
   canInstall: boolean
   canCheck: boolean
 } {
+  // npm run dev: o número da rail é o package.json (versão real). Sem fake de patch.
   if (!packaged) {
     if (status.state === 'checking') {
       return {
         tone: 'neutral',
         label: 'Verificando…',
-        detail: 'Prévia do instalador — no .exe isto consulta o feed de verdade.',
+        detail: 'Código local — o número acima é o package.json.',
         canInstall: false,
         canCheck: false
       }
     }
-    if (status.state === 'downloaded' || status.state === 'available') {
-      return {
-        tone: status.urgency === 'mandatory' ? 'mandatory' : 'optional',
-        label:
-          status.urgency === 'mandatory'
-            ? 'Atualização obrigatória pronta'
-            : 'Atualização pronta',
-        detail: `Prévia: v${status.version || '…'} como no .exe. Atualizar agora só reinicia de verdade no instalador.`,
-        canInstall: true,
-        canCheck: true
-      }
-    }
     return {
-      tone: 'optional',
-      label: 'Prévia das atualizações',
+      tone: 'ok',
+      label: 'App atualizado',
       detail:
-        'No .exe sandbox/prod: Verificar consulta o feed e Atualizar agora instala. Aqui é o mesmo visual — não baixa nem reinicia.',
-      canInstall: true,
+        'Você está na versão do código local. Instalador novo só depois de bump + Release Windows.',
+      canInstall: false,
       canCheck: true
     }
   }
@@ -226,13 +206,9 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
       setBusy(true)
       setStatus({ state: 'checking' })
       window.setTimeout(() => {
-        setStatus({
-          state: 'downloaded',
-          version: bumpPreviewPatch(version),
-          urgency: 'optional'
-        })
+        setStatus({ state: 'up_to_date' })
         setBusy(false)
-      }, 700)
+      }, 400)
       return
     }
     setBusy(true)

@@ -1,10 +1,11 @@
 import { BrowserView, shell } from 'electron'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import { getMainWindow, resolveWindowTitle } from './window'
 import {
   getPanelModeUrl,
   getPanelOrigin,
   getPanelPathUrl,
-  getPanelUrl,
   panelModeFromUrl
 } from '../shared/config'
 import { getDelivaiSession } from './delivai-session'
@@ -14,6 +15,7 @@ import { clearSession, getSession, isMockSession, patchSessionBranding } from '.
 import { sanitizeCompanyName, sanitizeLogoUrl } from '../shared/branding'
 import { resolveLogoForShell } from './logo-cache'
 import {
+  AgentAuthError,
   fetchPanelHydrate,
   fetchPanelSessionByCode,
   type PanelSnapshot
@@ -33,6 +35,10 @@ let contentLoaded = false
 let seeding = false
 let embedHooked = false
 let reauthInFlight = false
+/** Recuperando /login no BrowserView — não desloga o agente. */
+let recovering = false
+/** Evita reload infinito se o cookie do painel não grudar. */
+let lastRecoverAt = 0
 /** Popover do shell (card versão) — BrowserView some temporariamente. */
 let panelOverlaySuppressed = false
 let lastPanelBounds: { x: number; y: number; width: number; height: number } | null = null
@@ -43,6 +49,8 @@ const PANEL_NAV_CONSOLE_PREFIX = '[delidesk-panel-nav]'
 const EMBED_BOOTSTRAP = `
 (() => {
   try {
+    sessionStorage.setItem('delivai_auth_grace_until', String(Date.now() + 120000));
+    sessionStorage.removeItem('delivai_session_expired_redirect');
     localStorage.setItem('delivai_delidesk_embed', '1');
     document.documentElement.classList.add('delidesk-embed');
     if (!document.getElementById('delidesk-embed-css')) {
@@ -64,7 +72,7 @@ const EMBED_BOOTSTRAP = `
       window.__delideskNavHooked = true;
       const notify = () => {
         try {
-          console.log('${PANEL_NAV_CONSOLE_PREFIX}', location.href);
+          console.log('[delidesk-panel-nav]', location.href);
         } catch (e) {}
       };
       const wrap = (fn) => function () {
@@ -82,10 +90,22 @@ const EMBED_BOOTSTRAP = `
 })()
 `
 
+function panelEmbedPreloadPath(): string | undefined {
+  const p = join(__dirname, '../preload/panel-embed.js')
+  return existsSync(p) ? p : undefined
+}
+
+function agentSessionAlive(): boolean {
+  const agent = getSession()
+  return Boolean(agent?.accessToken && !isMockSession(agent))
+}
+
 function ensureView(): BrowserView {
   if (view) return view
+  const preload = panelEmbedPreloadPath()
   view = new BrowserView({
     webPreferences: {
+      ...(preload ? { preload } : {}),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -133,6 +153,19 @@ function ensureView(): BrowserView {
       if (win && !win.isDestroyed()) win.setTitle(resolveWindowTitle())
       emitPanelNavFromUrl(view?.webContents.getURL() || '')
     })
+    const blockLoginNav = (event: { preventDefault: () => void }, url: string): void => {
+      if (seeding) return
+      if (!isPanelLoginUrl(url)) return
+      if (!agentSessionAlive()) return
+      event.preventDefault()
+      void recoverPanelSession('bloqueou /login')
+    }
+    view.webContents.on('will-navigate', (event, url) => {
+      blockLoginNav(event, url)
+    })
+    view.webContents.on('will-redirect', (event, url) => {
+      blockLoginNav(event, url)
+    })
     // SPA navigate (React Router) — sync rail quando o painel muda de rota sozinho.
     view.webContents.on('did-navigate-in-page', (_e, url) => {
       emitPanelNavFromUrl(url)
@@ -161,7 +194,9 @@ function ensureView(): BrowserView {
 
 function emitPanelNavFromUrl(url: string): void {
   if (isPanelLoginUrl(url)) {
-    if (!seeding) forcePanelReauth('painel em /login')
+    if (!seeding && !recovering) {
+      void recoverPanelSession('painel em /login')
+    }
     return
   }
   const mode = panelModeFromUrl(url) as PanelMode | null
@@ -183,10 +218,13 @@ function isPanelLoginUrl(url: string): boolean {
   }
 }
 
-/** Sem cookie/sessão do painel: volta à tela Entrar com DelivAI (não fica “Online” falso). */
+/** Só quando o token do PC (agente) morreu de verdade — não por /login no BrowserView. */
 export function forcePanelReauth(reason: string): void {
   if (reauthInFlight) return
   reauthInFlight = true
+  contentLoaded = false
+  recovering = false
+  seeding = false
   console.warn('[panel] reauth required:', reason)
   hidePanel()
   clearSession()
@@ -200,6 +238,70 @@ export function forcePanelReauth(reason: string): void {
   setTimeout(() => {
     reauthInFlight = false
   }, 2500)
+}
+
+async function restorePanelAuthInPlace(): Promise<boolean> {
+  const v = view
+  if (!v) return false
+  let snap = loadPanelSnapshot()
+  try {
+    snap = await fetchPanelHydrate()
+  } catch (err) {
+    if (err instanceof AgentAuthError) throw err
+    if (!snap) snap = snapshotFromAgentSession()
+  }
+  if (!snap) return false
+  try {
+    snap = await ensurePanelSessionCookie(snap)
+  } catch (err) {
+    if (err instanceof AgentAuthError) throw err
+  }
+  savePanelSnapshot(snap)
+  await injectPanelSnapshot(v, snap)
+  return true
+}
+
+/** Painel caiu em /login: regrava cookie + localStorage. Não manda o lojista autenticar o PC de novo. */
+async function recoverPanelSession(reason: string): Promise<void> {
+  if (recovering || seeding || reauthInFlight) return
+  if (!agentSessionAlive()) {
+    forcePanelReauth(reason)
+    return
+  }
+  recovering = true
+  console.warn('[panel] recover (keep agent session):', reason)
+  try {
+    const ok = await restorePanelAuthInPlace()
+    if (!ok) {
+      console.warn('[panel] recover: sem snapshot — agente permanece logado')
+      return
+    }
+    const v = view
+    if (!v) return
+    const now = Date.now()
+    if (now - lastRecoverAt < 15_000) {
+      console.warn('[panel] recover: cooldown — não recarrega de novo')
+      return
+    }
+    lastRecoverAt = now
+    const target = urlFor(currentMode)
+    if (isPanelLoginUrl(v.webContents.getURL())) {
+      await navigatePanelInPage(v, target)
+    } else {
+      v.webContents.reload()
+      await waitForLoad(v)
+    }
+  } catch (err) {
+    if (err instanceof AgentAuthError) {
+      forcePanelReauth(err.message || reason)
+      return
+    }
+    console.warn('[panel] recover failed', err)
+  } finally {
+    setTimeout(() => {
+      recovering = false
+    }, 4000)
+  }
 }
 
 async function clearPanelSessionCookie(): Promise<void> {
@@ -221,7 +323,7 @@ async function writePanelSessionCookie(snap: PanelSnapshot): Promise<void> {
   const origin = getPanelOrigin()
   const secure = origin.startsWith('https:')
   await getDelivaiSession().cookies.set({
-    url: origin,
+    url: `${origin}/`,
     name,
     value: token,
     path: '/',
@@ -263,8 +365,9 @@ async function ensurePanelSessionCookie(snap: PanelSnapshot): Promise<PanelSnaps
     return merged
   } catch (err) {
     console.warn('[panel] panel-hydrate for cookie failed', err)
-    // Sessão do agente inválida ou AuthFilter bloqueando: não abrir Pedidos “manco”.
-    throw err
+    if (err instanceof AgentAuthError) throw err
+    // Agente ainda válido: segue com localStorage; o cookie tenta de novo no recover.
+    return snap
   }
 }
 
@@ -385,6 +488,56 @@ function alreadyOn(v: BrowserView, target: string): boolean {
   }
 }
 
+/** Troca de aba: SPA no mesmo origin. Full load só se a view ainda não tem o site. */
+async function navigatePanelInPage(v: BrowserView, target: string): Promise<void> {
+  if (alreadyOn(v, target)) return
+  const cur = v.webContents.getURL()
+  if (!cur || cur === 'about:blank' || !cur.startsWith('http')) {
+    await safeLoadURL(v, target)
+    return
+  }
+  try {
+    const dest = new URL(target)
+    const curOrigin = new URL(cur).origin
+    if (dest.origin !== curOrigin) {
+      await safeLoadURL(v, target)
+      return
+    }
+    if (isPanelLoginUrl(cur)) {
+      await v.webContents.executeJavaScript(
+        `window.location.replace(${JSON.stringify(target)}); true;`,
+        true
+      )
+      await waitForLoad(v)
+      return
+    }
+    const href = `${dest.pathname}${dest.search}`
+    const landed = (await v.webContents.executeJavaScript(
+      `(() => {
+        try {
+          sessionStorage.setItem('delivai_auth_grace_until', String(Date.now() + 120000));
+          sessionStorage.removeItem('delivai_session_expired_redirect');
+          localStorage.setItem('delivai_delidesk_embed', '1');
+          const href = ${JSON.stringify(href)};
+          if ((location.pathname + location.search) !== href) {
+            window.history.pushState({}, '', href);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          }
+          return location.pathname + location.search;
+        } catch (e) {
+          return '';
+        }
+      })()`,
+      true
+    )) as string
+    if (pathKey(`https://x${landed || '/'}`) !== pathKey(target)) {
+      await safeLoadURL(v, target)
+    }
+  } catch {
+    await safeLoadURL(v, target)
+  }
+}
+
 function panelDestPath(snap: PanelSnapshot): string {
   const u = snap.user
   const cnpj = String(u.cnpj || '').replace(/\D/g, '')
@@ -411,6 +564,10 @@ async function injectPanelSnapshot(v: BrowserView, snap: PanelSnapshot): Promise
         if (cnpj) localStorage.setItem('cnpj', cnpj);
         localStorage.setItem('license_modules', JSON.stringify(d.license_modules || {}));
         localStorage.setItem(d.embed_key, '1');
+        try {
+          sessionStorage.setItem('delivai_auth_grace_until', String(Date.now() + 120000));
+          sessionStorage.removeItem('delivai_session_expired_redirect');
+        } catch (e) {}
         const brand = {
           name: (d.company_name || d.user.name || '').toString().trim() || undefined,
           logoUrl: (d.company_logo_url || '').toString().trim() || undefined,
@@ -499,13 +656,19 @@ async function applyPanelSnapshot(snap: PanelSnapshot): Promise<void> {
   try {
     withCookie = await ensurePanelSessionCookie(snap)
   } catch (err) {
-    console.warn('[panel] sem crachá do painel — voltando ao login', err)
-    forcePanelReauth('sem cookie do painel')
-    return
+    if (err instanceof AgentAuthError) {
+      console.warn('[panel] agente sem token — login do PC', err)
+      forcePanelReauth('sem cookie do painel')
+      return
+    }
+    console.warn('[panel] cookie do painel falhou — segue com localStorage', err)
+    withCookie = snap
   }
   const destPath = panelDestPath(withCookie)
-  currentMode = destPath.startsWith('/dev') ? 'dev-home' : 'orders'
-  const dest = getPanelPathUrl(destPath)
+  if (!contentLoaded) {
+    currentMode = destPath.startsWith('/dev') ? 'dev-home' : 'orders'
+  }
+  const dest = contentLoaded ? urlFor(currentMode) : getPanelPathUrl(destPath)
   const boot = `${getPanelOrigin()}/delidesk-sso?embed=delidesk&boot=1`
   seeding = true
   try {
@@ -617,21 +780,29 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
   v.setAutoResize({ width: true, height: true })
   visible = true
 
-  // Nunca abrir Pedidos/Chat sem sessão do painel — evita gate “Conecte pelo DeliDesk”.
-  if (seeding) return
+  if (seeding || recovering) return
+  if (contentLoaded) {
+    const target = urlFor(currentMode)
+    if (!alreadyOn(v, target)) {
+      void navigatePanelInPage(v, target)
+    }
+    return
+  }
   if (!showPanelHydrateInFlight) {
     showPanelHydrateInFlight = (async () => {
       try {
         const ok = await ensurePanelHydrated()
         if (!ok) {
           console.warn('[panel] showPanel: sem sessão do painel')
+          if (agentSessionAlive()) {
+            return
+          }
           forcePanelReauth('hydrate falhou')
           return
         }
-        // Usa currentMode (pode ter mudado durante o hydrate).
         const target = urlFor(currentMode)
         if (!alreadyOn(v, target)) {
-          await safeLoadURL(v, target)
+          await navigatePanelInPage(v, target)
         } else {
           void v.webContents.executeJavaScript(EMBED_BOOTSTRAP).catch(() => undefined)
         }
@@ -641,12 +812,11 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
       }
     })()
   } else {
-    // Hydrate em voo: ao terminar, showPanel seguinte já aponta currentMode.
     void showPanelHydrateInFlight.then(() => {
       if (!view || !visible || seeding) return
       const target = urlFor(currentMode)
       if (!alreadyOn(view, target)) {
-        void safeLoadURL(view, target)
+        void navigatePanelInPage(view, target)
       }
     })
   }
@@ -695,10 +865,10 @@ export function reloadPanel(): void {
     const ok = await ensurePanelHydrated()
     if (!ok) {
       console.warn('[panel] reload: sem sessão do painel')
+      if (agentSessionAlive()) return
       forcePanelReauth('reload sem sessão')
       return
     }
-    // Reaplica snapshot (garante localStorage) e recarrega a rota atual.
     const cached = loadPanelSnapshot() || snapshotFromAgentSession()
     if (cached) {
       await applyPanelSnapshot(cached)
@@ -725,5 +895,7 @@ export function destroyPanel(): void {
   view = null
   contentLoaded = false
   seeding = false
+  recovering = false
+  lastRecoverAt = 0
   embedHooked = false
 }
