@@ -71,6 +71,12 @@ export default function App(): React.JSX.Element {
     }
   }, [])
 
+  useEffect(() => {
+    if (!session && !booting) {
+      void window.delidesk.hidePanel()
+    }
+  }, [session, booting])
+
   const handleLogin = useCallback(async () => {
     setLoggingIn(true)
     setLoginError(null)

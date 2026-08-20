@@ -298,7 +298,7 @@ function registerIpc(): void {
 
   ipcMain.handle(IPC.AUTH_LOGOUT, () => {
     cancelAuthWait()
-    hidePanel()
+    destroyPanel()
     stopBackendPoll()
     stopMockSse()
     clearSession()
