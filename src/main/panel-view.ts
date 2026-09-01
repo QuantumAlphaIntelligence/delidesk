@@ -338,8 +338,30 @@ async function writePanelSessionCookie(snap: PanelSnapshot): Promise<void> {
 /**
  * Garante token de sessão SEC-2 (API) + cookie no partition.
  * Cache local sozinho não basta quando SESSION_AUTH está ligado.
+ * No reload: re-hidrata pelo agente (cookie HttpOnly some; Bearer do agente permanece).
  */
 async function ensurePanelSessionCookie(snap: PanelSnapshot): Promise<PanelSnapshot> {
+  if (!isMockSession(getSession()) && agentSessionAlive()) {
+    try {
+      const fresh = await fetchPanelHydrate()
+      const merged: PanelSnapshot = {
+        ...snap,
+        ...fresh,
+        user: fresh.user || snap.user,
+        licenseModules: fresh.licenseModules ?? snap.licenseModules,
+        companyName: fresh.companyName ?? snap.companyName,
+        companyLogoUrl: fresh.companyLogoUrl ?? snap.companyLogoUrl
+      }
+      if (merged.panelSessionToken?.trim()) {
+        await writePanelSessionCookie(merged)
+        return merged
+      }
+      return merged
+    } catch (err) {
+      if (err instanceof AgentAuthError) throw err
+      console.warn('[panel] panel-hydrate refresh failed; using cached token', err)
+    }
+  }
   if (snap.panelSessionToken?.trim()) {
     await writePanelSessionCookie(snap)
     return snap
