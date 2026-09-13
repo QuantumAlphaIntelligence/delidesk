@@ -2,6 +2,26 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { ShellRole } from '@shared/ipc'
 import { DeliDeskMark } from './DeliDeskMark'
 import { VersionUpdateCard } from './VersionUpdateCard'
+import { railText, type RailLang } from '../i18n/rail'
+
+const STORE_LABEL: Partial<Record<AppNavId, string>> = {
+  delivery: 'delivery',
+  orders: 'pdv',
+  motoboys: 'motoboys',
+  chat: 'conversations',
+  schedule: 'schedule',
+  manager: 'manager',
+  company: 'company',
+  employees: 'employees',
+  clients: 'clients',
+  license: 'license',
+  print: 'print'
+}
+
+function storeLabel(lang: RailLang, id: AppNavId, fallback: string): string {
+  const key = STORE_LABEL[id]
+  return key ? railText(lang, key) : fallback
+}
 
 export type AppNavId =
   | 'orders'
@@ -11,6 +31,8 @@ export type AppNavId =
   | 'delivery'
   | 'motoboys'
   | 'schedule'
+  | 'manager'
+  | 'employees'
   | 'company'
   | 'license'
   | 'clients'
@@ -44,6 +66,8 @@ type Props = {
   companyDocLabel?: string
   companyLogoUrl?: string
   online: 'online' | 'offline'
+  lang: RailLang
+  onLangChange: (lang: RailLang) => void
   onNavigate: (id: AppNavId) => void
   onLogout: () => void
 }
@@ -52,18 +76,35 @@ type AppVersionInfo = { version: string; channel: string; packaged?: boolean }
 
 function IconBox({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <span className="flex h-6 w-6 shrink-0 items-center justify-center" aria-hidden>
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] group-hover:bg-delivai-neon-green/15"
+      aria-hidden
+    >
       {children}
     </span>
   )
 }
 
-const iconClass = 'h-6 w-6'
+const iconClass = 'h-5 w-5'
 
 const MAIN: NavItem[] = [
   {
+    id: 'delivery',
+    label: 'Delivery',
+    hint: 'Delivery — despacho e Fast Order',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M3 14h11V7H3v7Zm11 0h3l3 3v-3h1V9h-7v5Z" strokeLinejoin="round" />
+          <circle cx="7" cy="17.5" r="1.5" />
+          <circle cx="17" cy="17.5" r="1.5" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
     id: 'orders',
-    label: 'Pedidos',
+    label: 'PDV',
     icon: (
       <IconBox>
         <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -73,28 +114,15 @@ const MAIN: NavItem[] = [
     )
   },
   {
-    id: 'chat',
-    label: 'Conversas',
+    id: 'motoboys',
+    label: 'Motoboys',
     icon: (
       <IconBox>
         <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path
-            d="M5 18v-1.5A3.5 3.5 0 0 1 8.5 13H18a3 3 0 0 0 3-3V8a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v9l2-1.5Z"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </IconBox>
-    )
-  },
-  {
-    id: 'pdvai',
-    label: 'Balcão',
-    hint: 'PDVAI',
-    icon: (
-      <IconBox>
-        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <rect x="3" y="5" width="18" height="14" rx="2" />
-          <path d="M7 9h4M7 12h6M7 15h3" strokeLinecap="round" />
+          <circle cx="6.5" cy="16.5" r="2" />
+          <circle cx="17.5" cy="16.5" r="2" />
+          <path d="M8.5 16.5h5l2-5H9l-.5 5Z" strokeLinejoin="round" />
+          <path d="M12 7h3l2 4.5" strokeLinecap="round" />
         </svg>
       </IconBox>
     )
@@ -120,40 +148,65 @@ const CONFIG: NavItem[] = [
 
 const LOJA: NavItem[] = [
   {
-    id: 'delivery',
-    label: 'Entregas',
+    id: 'chat',
+    label: 'Conversas',
     icon: (
       <IconBox>
         <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M3 14h11V7H3v7Zm11 0h3l3 3v-3h1V9h-7v5Z" strokeLinejoin="round" />
-          <circle cx="7" cy="17.5" r="1.5" />
-          <circle cx="17" cy="17.5" r="1.5" />
-        </svg>
-      </IconBox>
-    )
-  },
-  {
-    id: 'motoboys',
-    label: 'Motoboys',
-    icon: (
-      <IconBox>
-        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <circle cx="6.5" cy="16.5" r="2" />
-          <circle cx="17.5" cy="16.5" r="2" />
-          <path d="M8.5 16.5h5l2-5H9l-.5 5Z" strokeLinejoin="round" />
-          <path d="M12 7h3l2 4.5" strokeLinecap="round" />
+          <path
+            d="M5 18v-1.5A3.5 3.5 0 0 1 8.5 13H18a3 3 0 0 0 3-3V8a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v9l2-1.5Z"
+            strokeLinejoin="round"
+          />
         </svg>
       </IconBox>
     )
   },
   {
     id: 'schedule',
-    label: 'Agenda',
+    label: 'Agendamentos',
     icon: (
       <IconBox>
         <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
           <rect x="4" y="5" width="16" height="15" rx="2" />
           <path d="M8 3v4M16 3v4M4 10h16" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'manager',
+    label: 'Vendas',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 19V9l8-5 8 5v10" strokeLinejoin="round" />
+          <path d="M9 19v-6h6v6" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'company',
+    label: 'Empresa',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <path d="M4 20V6l8-3 8 3v14" strokeLinejoin="round" />
+          <path d="M9 20v-6h6v6M9 10h.01M15 10h.01M12 10h.01" strokeLinecap="round" />
+        </svg>
+      </IconBox>
+    )
+  },
+  {
+    id: 'employees',
+    label: 'Colaboradores',
+    icon: (
+      <IconBox>
+        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
+          <circle cx="9" cy="8" r="3" />
+          <path d="M3.5 19a5.5 5.5 0 0 1 11 0" strokeLinecap="round" />
+          <circle cx="17" cy="9" r="2.2" />
+          <path d="M16 19a4 4 0 0 1 4.5-3.8" strokeLinecap="round" />
         </svg>
       </IconBox>
     )
@@ -171,22 +224,6 @@ const LOJA: NavItem[] = [
         </svg>
       </IconBox>
     )
-  }
-]
-
-const CONFIG_FOOTER: NavItem[] = [
-  ...CONFIG,
-  {
-    id: 'company',
-    label: 'Empresa',
-    icon: (
-      <IconBox>
-        <svg viewBox="0 0 24 24" className={iconClass} fill="none" stroke="currentColor" strokeWidth="1.8">
-          <path d="M4 20V6l8-3 8 3v14" strokeLinejoin="round" />
-          <path d="M9 20v-6h6v6M9 10h.01M15 10h.01M12 10h.01" strokeLinecap="round" />
-        </svg>
-      </IconBox>
-    )
   },
   {
     id: 'license',
@@ -201,6 +238,8 @@ const CONFIG_FOOTER: NavItem[] = [
     )
   }
 ]
+
+const CONFIG_FOOTER: NavItem[] = CONFIG
 
 /** Rail da equipe DelivAI (espelha /dev — sem Pedidos/Loja). */
 const DEV_MAIN: NavItem[] = [
@@ -309,32 +348,36 @@ function NavButton({
   item,
   active,
   expanded,
+  label,
+  hint,
   onClick
 }: {
   item: NavItem
   active: boolean
   expanded: boolean
+  label: string
+  hint?: string
   onClick: () => void
 }): React.JSX.Element {
   return (
     <button
       type="button"
-      title={item.hint ? `${item.label} (${item.hint})` : item.label}
+      title={hint || label}
       onClick={onClick}
-      className={`relative flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 transition
+      className={`group relative flex w-full items-center gap-2.5 rounded-2xl px-1.5 py-1.5 transition
         ${expanded ? 'justify-start' : 'justify-center'}
         ${
           active
-            ? 'bg-delivai-neon-green text-delivai-blue-dark shadow-[0_0_20px_-4px_rgba(71,242,199,0.55)]'
-            : 'text-delivai-text-gray/75 hover:bg-white/10 hover:text-white'
+            ? 'bg-delivai-neon-green/[0.16] font-semibold text-delivai-neon-green shadow-[inset_3px_0_0_#47f2c7]'
+            : 'text-white/80 hover:bg-white/[0.07] hover:text-delivai-neon-green'
         }`}
     >
-      {item.icon}
+      <span className={active ? '[&>span]:bg-delivai-neon-green/25' : ''}>{item.icon}</span>
       <span
         className={`truncate text-sm font-semibold whitespace-nowrap transition-opacity duration-150
           ${expanded ? 'max-w-[10rem] opacity-100' : 'max-w-0 overflow-hidden opacity-0'}`}
       >
-        {item.label}
+        {label}
       </span>
     </button>
   )
@@ -352,6 +395,8 @@ export function AppRail({
   companyDocLabel,
   companyLogoUrl,
   online,
+  lang,
+  onLangChange,
   onNavigate,
   onLogout
 }: Props): React.JSX.Element {
@@ -457,13 +502,15 @@ export function AppRail({
                 item={item}
                 active={active === item.id}
                 expanded={expanded}
+                label={item.label}
+                hint={item.hint}
                 onClick={() => onNavigate(item.id)}
               />
             ))}
             {expanded ? (
               <div className="px-2 pb-1 pt-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
-                  Máquina
+                  {railText(lang, 'section_machine')}
                 </p>
                 <div className="mt-1.5 h-px bg-white/10" />
               </div>
@@ -476,18 +523,29 @@ export function AppRail({
                 item={item}
                 active={active === item.id}
                 expanded={expanded}
+                label={storeLabel(lang, item.id, item.label)}
+                hint={item.id === 'print' ? railText(lang, 'print_hint') : item.hint}
                 onClick={() => onNavigate(item.id)}
               />
             ))}
           </>
         ) : (
           <>
+            {expanded ? (
+              <div className="px-2 pb-1 pt-1">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
+                  {railText(lang, 'section_orders')}
+                </p>
+              </div>
+            ) : null}
             {MAIN.map((item) => (
               <NavButton
                 key={item.id}
                 item={item}
                 active={active === item.id}
                 expanded={expanded}
+                label={storeLabel(lang, item.id, item.label)}
+                hint={item.id === 'delivery' ? railText(lang, 'delivery_title') : item.hint}
                 onClick={() => onNavigate(item.id)}
               />
             ))}
@@ -495,7 +553,7 @@ export function AppRail({
             {expanded ? (
               <div className="px-2 pb-1 pt-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
-                  Loja
+                  {railText(lang, 'section_store')}
                 </p>
                 <div className="mt-1.5 h-px bg-white/10" />
               </div>
@@ -507,6 +565,8 @@ export function AppRail({
                 item={item}
                 active={active === item.id}
                 expanded={expanded}
+                label={storeLabel(lang, item.id, item.label)}
+                hint={item.hint}
                 onClick={() => onNavigate(item.id)}
               />
             ))}
@@ -514,7 +574,7 @@ export function AppRail({
             {expanded ? (
               <div className="px-2 pb-1 pt-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-delivai-text-gray/40">
-                  Configuração
+                  {railText(lang, 'section_machine')}
                 </p>
                 <div className="mt-1.5 h-px bg-white/10" />
               </div>
@@ -528,6 +588,8 @@ export function AppRail({
                 item={item}
                 active={active === item.id}
                 expanded={expanded}
+                label={storeLabel(lang, item.id, item.label)}
+                hint={item.id === 'print' ? railText(lang, 'print_hint') : item.hint}
                 onClick={() => onNavigate(item.id)}
               />
             ))}
@@ -544,17 +606,52 @@ export function AppRail({
           <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
           {expanded ? (
             <span className="whitespace-nowrap">
-              {online === 'online' ? 'Online' : 'Offline'}
+              {online === 'online' ? railText(lang, 'online') : railText(lang, 'offline')}
             </span>
           ) : null}
+        </div>
+        <div
+          className={`mx-0.5 flex items-center gap-1 ${expanded ? 'justify-between' : 'justify-center'}`}
+          role="group"
+          aria-label={railText(lang, 'language')}
+        >
+          {expanded ? (
+            (['pt', 'en', 'es'] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => onLangChange(code)}
+                title={code.toUpperCase()}
+                className={`flex-1 rounded-md px-1.5 py-1 text-[10px] font-bold transition
+                  ${
+                    lang === code
+                      ? 'bg-delivai-neon-green/20 text-delivai-neon-green'
+                      : 'text-white/40 hover:bg-white/10 hover:text-white'
+                  }`}
+              >
+                {code.toUpperCase()}
+              </button>
+            ))
+          ) : (
+            <button
+              type="button"
+              title={railText(lang, 'language')}
+              onClick={() =>
+                onLangChange(lang === 'pt' ? 'en' : lang === 'en' ? 'es' : 'pt')
+              }
+              className="rounded-md px-1.5 py-1 text-[10px] font-bold bg-delivai-neon-green/20 text-delivai-neon-green"
+            >
+              {lang.toUpperCase()}
+            </button>
+          )}
         </div>
         <VersionUpdateCard expanded={expanded} appInfo={appInfo} />
         <button
           type="button"
-          title="Sair"
+          title={railText(lang, 'logout')}
           onClick={onLogout}
-          className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-delivai-text-gray/70
-            transition hover:bg-white/10 hover:text-white
+          className={`group flex w-full items-center gap-2.5 rounded-2xl px-1.5 py-1.5 text-white/70
+            transition hover:bg-red-500/15 hover:text-red-300
             ${expanded ? 'justify-start' : 'justify-center'}`}
         >
           <IconBox>
@@ -563,7 +660,7 @@ export function AppRail({
               <path d="M15 12H4m0 0 3-3m-3 3 3 3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </IconBox>
-          {expanded ? <span className="text-sm font-semibold">Sair</span> : null}
+          {expanded ? <span className="text-sm font-semibold">{railText(lang, 'logout')}</span> : null}
         </button>
       </div>
     </aside>
