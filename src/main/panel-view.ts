@@ -192,6 +192,14 @@ function ensureView(): BrowserView {
   return view
 }
 
+function isInternalOrderUrl(url: string): boolean {
+  try {
+    return new URL(url).pathname.includes('/internal-order')
+  } catch {
+    return false
+  }
+}
+
 function emitPanelNavFromUrl(url: string): void {
   if (isPanelLoginUrl(url)) {
     if (!seeding && !recovering) {
@@ -199,6 +207,7 @@ function emitPanelNavFromUrl(url: string): void {
     }
     return
   }
+  if (isInternalOrderUrl(url)) return
   const mode = panelModeFromUrl(url) as PanelMode | null
   if (!mode) return
   if (mode === currentMode) return
@@ -287,9 +296,6 @@ async function recoverPanelSession(reason: string): Promise<void> {
     const target = urlFor(currentMode)
     if (isPanelLoginUrl(v.webContents.getURL())) {
       await navigatePanelInPage(v, target)
-    } else {
-      v.webContents.reload()
-      await waitForLoad(v)
     }
   } catch (err) {
     if (err instanceof AgentAuthError) {
@@ -338,8 +344,30 @@ async function writePanelSessionCookie(snap: PanelSnapshot): Promise<void> {
 /**
  * Garante token de sessão SEC-2 (API) + cookie no partition.
  * Cache local sozinho não basta quando SESSION_AUTH está ligado.
+ * No reload: re-hidrata pelo agente (cookie HttpOnly some; Bearer do agente permanece).
  */
 async function ensurePanelSessionCookie(snap: PanelSnapshot): Promise<PanelSnapshot> {
+  if (!isMockSession(getSession()) && agentSessionAlive()) {
+    try {
+      const fresh = await fetchPanelHydrate()
+      const merged: PanelSnapshot = {
+        ...snap,
+        ...fresh,
+        user: fresh.user || snap.user,
+        licenseModules: fresh.licenseModules ?? snap.licenseModules,
+        companyName: fresh.companyName ?? snap.companyName,
+        companyLogoUrl: fresh.companyLogoUrl ?? snap.companyLogoUrl
+      }
+      if (merged.panelSessionToken?.trim()) {
+        await writePanelSessionCookie(merged)
+        return merged
+      }
+      return merged
+    } catch (err) {
+      if (err instanceof AgentAuthError) throw err
+      console.warn('[panel] panel-hydrate refresh failed; using cached token', err)
+    }
+  }
   if (snap.panelSessionToken?.trim()) {
     await writePanelSessionCookie(snap)
     return snap
@@ -478,10 +506,23 @@ function pathKey(u: string): string {
   }
 }
 
+function queryKey(u: string): string {
+  try {
+    const url = new URL(u)
+    url.hash = ''
+    return `${url.pathname.replace(/\/$/, '')}?${url.searchParams.toString()}`
+  } catch {
+    return normalizeUrl(u)
+  }
+}
+
 function alreadyOn(v: BrowserView, target: string): boolean {
   try {
     const cur = v.webContents.getURL()
     if (!cur || cur === 'about:blank') return false
+    if (isInternalOrderUrl(cur) || isInternalOrderUrl(target)) {
+      return queryKey(cur) === queryKey(target)
+    }
     return pathKey(cur) === pathKey(target)
   } catch {
     return false
@@ -544,7 +585,7 @@ function panelDestPath(snap: PanelSnapshot): string {
   const isCollab = u.isCollaborator === true || u.is_collaborator === true
   const internal = '99999999000199'
   if (isCollab && cnpj === internal) return '/dev'
-  return '/dashboard/orders'
+  return '/dashboard/delivery'
 }
 
 async function injectPanelSnapshot(v: BrowserView, snap: PanelSnapshot): Promise<void> {
@@ -682,10 +723,8 @@ async function applyPanelSnapshot(snap: PanelSnapshot): Promise<void> {
     )
     await waitForLoad(v)
     if (!(await panelHasUser(v))) {
-      console.warn('[panel] user missing after navigate — re-inject + reload')
+      console.warn('[panel] user missing after navigate — re-inject sem reload')
       await injectPanelSnapshot(v, withCookie)
-      v.webContents.reload()
-      await waitForLoad(v)
     }
     console.info('[panel] snapshot applied', {
       dest: destPath,
@@ -782,6 +821,17 @@ export function showPanel(mode: PanelMode, bounds: PanelBounds): void {
 
   if (seeding || recovering) return
   if (contentLoaded) {
+    try {
+      const cur = v.webContents.getURL()
+      if (
+        isInternalOrderUrl(cur) &&
+        (mode === 'orders' || mode === 'delivery' || mode === 'internal-order')
+      ) {
+        return
+      }
+    } catch {
+      /* segue */
+    }
     const target = urlFor(currentMode)
     if (!alreadyOn(v, target)) {
       void navigatePanelInPage(v, target)

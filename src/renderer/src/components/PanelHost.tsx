@@ -1,9 +1,11 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { PanelMode } from '@shared/pdvai'
+import { railText, type RailLang } from '../i18n/rail'
 
 type Props = {
   mode: PanelMode
   online: boolean
+  lang?: RailLang
 }
 
 function readBounds(el: HTMLElement): {
@@ -29,7 +31,7 @@ function readBounds(el: HTMLElement): {
  * Importante: resize só chama setPanelBounds — nunca showPanel com mode antigo,
  * senão uma navegação interna (Abrir Entregas) é revertida pelo rail atrasado.
  */
-export function PanelHost({ mode, online }: Props): React.JSX.Element {
+export function PanelHost({ mode, online, lang = 'pt' }: Props): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
@@ -68,11 +70,10 @@ export function PanelHost({ mode, online }: Props): React.JSX.Element {
     return (
       <div className="h-full min-h-[420px] glass-card rounded-xl p-6 flex flex-col justify-center gap-3">
         <div className="rounded-lg bg-red-500/20 border border-red-500/40 text-red-200 text-sm px-3 py-2">
-          Sem internet — painel e WhatsApp indisponíveis
+          {railText(lang, 'offline_panel')}
         </div>
         <p className="text-sm text-delivai-text-gray/75">
-          Use <strong className="text-white">Balcão</strong> na barra lateral para venda local.
-          Quando a rede voltar, o painel carrega de novo.
+          {railText(lang, 'offline_wait')}
         </p>
       </div>
     )
