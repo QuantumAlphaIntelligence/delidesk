@@ -3,9 +3,9 @@ import type { AuthSession, AppOnlineStatus } from '@shared/ipc'
 import type { PanelMode } from '@shared/pdvai'
 import { displayCompanyName, maskCnpj } from '@shared/branding'
 import { PrintScreen } from './PrintScreen'
-import { PdvaiScreen } from './PdvaiScreen'
 import { PanelHost } from '../components/PanelHost'
 import { AppRail, type AppNavId } from '../components/AppRail'
+import { readRailLang, railText, writeRailLang, type RailLang } from '../i18n/rail'
 
 type Props = {
   session: AuthSession
@@ -19,6 +19,8 @@ const PANEL_MODES = new Set<AppNavId>([
   'delivery',
   'motoboys',
   'schedule',
+  'manager',
+  'employees',
   'company',
   'license',
   'clients',
@@ -37,32 +39,28 @@ const PANEL_MODES = new Set<AppNavId>([
   'dev-permissoes'
 ])
 
-function isPanelMode(id: AppNavId): id is PanelMode {
+const TITLE_KEY: Partial<Record<AppNavId, string>> = {
+  orders: 'pdv',
+  chat: 'conversations',
+  print: 'print',
+  delivery: 'delivery',
+  motoboys: 'motoboys',
+  schedule: 'schedule',
+  manager: 'manager',
+  employees: 'employees',
+  company: 'company',
+  license: 'license',
+  clients: 'clients'
+}
+
+function isPanelMode(id: AppNavId): boolean {
   return PANEL_MODES.has(id)
 }
 
-function titleFor(nav: AppNavId): string {
+function titleFor(nav: AppNavId, lang: RailLang): string {
+  const key = TITLE_KEY[nav]
+  if (key) return railText(lang, key)
   switch (nav) {
-    case 'orders':
-      return 'Pedidos'
-    case 'chat':
-      return 'Conversas'
-    case 'print':
-      return 'Impressão'
-    case 'pdvai':
-      return 'Balcão'
-    case 'delivery':
-      return 'Entregas'
-    case 'motoboys':
-      return 'Motoboys'
-    case 'schedule':
-      return 'Agenda'
-    case 'company':
-      return 'Empresa'
-    case 'license':
-      return 'Licença'
-    case 'clients':
-      return 'Clientes'
     case 'dev-home':
       return 'Painel de controle'
     case 'dev-licenses':
@@ -95,7 +93,7 @@ function titleFor(nav: AppNavId): string {
 }
 
 function defaultNavForRole(role: AuthSession['shellRole']): AppNavId {
-  return role === 'dev' ? 'dev-home' : 'orders'
+  return role === 'dev' ? 'dev-home' : 'delivery'
 }
 
 function navMatchesRole(nav: AppNavId, role: AuthSession['shellRole']): boolean {
@@ -111,9 +109,15 @@ export function HomeScreen({
 }: Props): React.JSX.Element {
   const shellRole = session.shellRole === 'dev' ? 'dev' : 'store'
   const [nav, setNav] = useState<AppNavId>(() => defaultNavForRole(shellRole))
+  const [lang, setLang] = useState<RailLang>(readRailLang)
   const embedPanel = isPanelMode(nav)
   const companyLabel = displayCompanyName(session)
   const companyDocLabel = maskCnpj(session.companyCnpj)
+
+  const changeLang = (next: RailLang): void => {
+    writeRailLang(next)
+    setLang(next)
+  }
 
   useEffect(() => {
     if (!navMatchesRole(nav, shellRole)) {
@@ -128,10 +132,15 @@ export function HomeScreen({
   }, [embedPanel])
 
   // Painel navega sozinho (ex.: Abrir Entregas) → rail acompanha.
+  // Fast Order / checkout iFood ficam em internal-order sem item na rail.
   useEffect(() => {
     return window.delidesk.onPanelNavChanged((mode) => {
-      if (!navMatchesRole(mode, shellRole)) return
-      setNav(mode)
+      if (mode === 'internal-order') {
+        setNav('delivery')
+        return
+      }
+      if (!navMatchesRole(mode as AppNavId, shellRole)) return
+      setNav(mode as AppNavId)
     })
   }, [shellRole])
 
@@ -144,31 +153,33 @@ export function HomeScreen({
         companyDocLabel={companyDocLabel}
         companyLogoUrl={session.companyLogoUrl}
         online={online}
+        lang={lang}
+        onLangChange={changeLang}
         onNavigate={setNav}
         onLogout={onLogout}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 bg-black/20 px-4 py-2">
-          <h1 className="min-w-0 truncate text-sm font-semibold text-white">{titleFor(nav)}</h1>
-          <div className="flex items-center gap-1">
+        <header className="flex h-8 shrink-0 items-center justify-between gap-2 border-b border-white/10 bg-black/20 px-3">
+          <h1 className="min-w-0 truncate text-xs font-semibold text-white">{titleFor(nav, lang)}</h1>
+          <div className="flex items-center gap-0.5">
             {embedPanel ? (
               <>
                 <button
                   type="button"
-                  className="rounded-md px-2 py-1 text-[11px] text-white/45 transition hover:bg-white/5 hover:text-white/80"
+                  className="rounded px-1.5 py-0.5 text-[10px] text-white/40 transition hover:bg-white/5 hover:text-white/75"
                   onClick={() => void window.delidesk.reloadPanel()}
-                  title="Recarregar painel"
+                  title={railText(lang, 'reload')}
                 >
-                  Recarregar
+                  {railText(lang, 'reload')}
                 </button>
                 <button
                   type="button"
-                  className="rounded-md px-2 py-1 text-[11px] text-white/45 transition hover:bg-white/5 hover:text-white/80"
-                  onClick={() => void window.delidesk.openPanelExternal(nav)}
-                  title="Abre no navegador com a sidebar completa do DelivAI"
+                  className="rounded px-1.5 py-0.5 text-[10px] text-white/40 transition hover:bg-white/5 hover:text-white/75"
+                  onClick={() => void window.delidesk.openPanelExternal(nav as PanelMode)}
+                  title={railText(lang, 'open_browser')}
                 >
-                  Abrir no navegador
+                  {railText(lang, 'open_browser')}
                 </button>
               </>
             ) : null}
@@ -183,10 +194,9 @@ export function HomeScreen({
           {nav === 'print' && (
             <PrintScreen companyName={companyLabel} online={online} />
           )}
-          {nav === 'pdvai' && shellRole !== 'dev' && (
-            <PdvaiScreen companyName={companyLabel} online={online} />
-          )}
-          {embedPanel && <PanelHost mode={nav} online={online === 'online'} />}
+          {embedPanel ? (
+            <PanelHost mode={nav as PanelMode} online={online === 'online'} lang={lang} />
+          ) : null}
         </main>
       </div>
     </div>

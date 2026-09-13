@@ -70,7 +70,7 @@ export function getPanelUrl(): string {
   if (process.env.DELIDESK_PANEL_URL) {
     return withEmbedQuery(process.env.DELIDESK_PANEL_URL)
   }
-  return getPanelPathUrl('/dashboard/orders')
+  return getPanelPathUrl('/dashboard/delivery')
 }
 
 /** Conversas / WhatsApp no painel. Override com DELIDESK_CHAT_URL. */
@@ -87,10 +87,16 @@ export function getPanelModeUrl(mode: string): string {
       return getChatUrl()
     case 'delivery':
       return getPanelPathUrl('/dashboard/delivery')
+    case 'internal-order':
+      return getPanelPathUrl('/dashboard/internal-order')
     case 'motoboys':
       return getPanelPathUrl('/dashboard/motoboys')
     case 'schedule':
       return getPanelPathUrl('/dashboard/schedule')
+    case 'manager':
+      return getPanelPathUrl('/dashboard/manager')
+    case 'employees':
+      return getPanelPathUrl('/dashboard/employees')
     case 'company':
       return getPanelPathUrl('/dashboard/company')
     case 'license':
@@ -124,6 +130,7 @@ export function getPanelModeUrl(mode: string): string {
     case 'dev-permissoes':
       return getPanelPathUrl('/dev/permissoes')
     case 'orders':
+      return getPanelPathUrl('/dashboard/orders')
     default:
       return getPanelUrl()
   }
@@ -138,14 +145,17 @@ export function panelModeFromUrl(url: string): string | null {
     return null
   }
   const p = path.replace(/\/+$/, '') || '/'
+  if (p.includes('/dashboard/internal-order')) return 'internal-order'
   if (p.includes('/dashboard/delivery')) return 'delivery'
   if (p.includes('/dashboard/motoboys')) return 'motoboys'
   if (p.includes('/dashboard/schedule')) return 'schedule'
+  if (p.includes('/dashboard/manager')) return 'manager'
+  if (p.includes('/dashboard/employees')) return 'employees'
   if (p.includes('/dashboard/company')) return 'company'
   if (p.includes('/dashboard/license')) return 'license'
   if (p.includes('/dashboard/clientes')) return 'clients'
   if (p.includes('/dashboard/conversations') || p.includes('/dashboard/chat')) return 'chat'
-  if (p.includes('/dashboard/orders') || p.includes('/dashboard/internal-order')) return 'orders'
+  if (p.includes('/dashboard/orders')) return 'orders'
   if (p.endsWith('/dev') || p.includes('/dev/')) {
     if (p.includes('/dev/licenses')) return 'dev-licenses'
     if (p.includes('/dev/contracts')) return 'dev-contracts'
