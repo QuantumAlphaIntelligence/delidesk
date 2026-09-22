@@ -20,7 +20,7 @@ Enquanto uma frente estiver ativa, o remoto deve ficar assim:
 
 ### Quando a PR da frente já foi mergeada e nasce outra branch
 
-1. Criar a branch **nova** (a “atual”) a partir do tronco certo.
+1. Criar a branch **nova** (a “atual”) a partir de `origin/main`. O que falta na `main` vai para a `main` antes. Detalhe: `backend-delivai/docs/operations/branches.md` § **Abrir frente nova**.
 2. Abrir PR / merge quando Leo pedir.
 3. **Apagar as antigas da mesma frente** (remoto + local) — só com “deixa só a atual” / limpeza explícita.
 4. Resultado: **apenas** troncos + a branch de melhoria **mais recente**.
