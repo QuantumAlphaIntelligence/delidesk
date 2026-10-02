@@ -32,6 +32,9 @@ export type DelideskApi = {
   setPanelOverlaySuppressed: (suppressed: boolean) => Promise<{ ok: boolean }>
   reloadPanel: () => Promise<{ ok: boolean }>
   openPanelExternal: (mode: PanelMode) => Promise<{ ok: boolean }>
+  setPanelLanguage: (lang: string) => Promise<{ ok: boolean }>
+  getPanelLicense: () => Promise<Record<string, unknown>>
+  onPanelLicense: (cb: (modules: Record<string, unknown>) => void) => () => void
   onPanelNavChanged: (cb: (mode: PanelMode) => void) => () => void
   onPanelReauthRequired: (cb: (reason?: string) => void) => () => void
   getAppVersion: () => Promise<{ version: string; channel: string; packaged: boolean }>

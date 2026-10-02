@@ -69,8 +69,10 @@ import {
   hidePanel,
   openPanelInBrowser,
   reloadPanel,
+  getPanelLicense,
   seedPanelSession,
   setPanelBounds,
+  setPanelLanguage,
   setPanelOverlaySuppressed,
   showPanel
 } from './panel-view'
@@ -364,6 +366,8 @@ function registerIpc(): void {
     openPanelInBrowser(mode)
     return { ok: true }
   })
+  ipcMain.handle(IPC.PANEL_SET_LANGUAGE, (_e, lang: string) => setPanelLanguage(lang))
+  ipcMain.handle(IPC.PANEL_GET_LICENSE, () => getPanelLicense())
 
   ipcMain.handle(IPC.PDVAI_GET_STATE, () => getPdvaiState())
   ipcMain.handle(

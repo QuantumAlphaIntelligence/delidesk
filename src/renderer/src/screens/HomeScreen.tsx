@@ -114,16 +114,35 @@ export function HomeScreen({
   const companyLabel = displayCompanyName(session)
   const companyDocLabel = maskCnpj(session.companyCnpj)
 
+  const [scheduleOn, setScheduleOn] = useState<boolean | null>(null)
+
   const changeLang = (next: RailLang): void => {
     writeRailLang(next)
     setLang(next)
+    void window.delidesk.setPanelLanguage(next)
   }
+
+  useEffect(() => {
+    void window.delidesk.setPanelLanguage(lang)
+  }, [lang])
+
+  useEffect(() => {
+    const read = (modules: Record<string, unknown>): void => {
+      setScheduleOn(modules.mod_agendamento === true)
+    }
+    void window.delidesk.getPanelLicense().then(read)
+    return window.delidesk.onPanelLicense(read)
+  }, [])
 
   useEffect(() => {
     if (!navMatchesRole(nav, shellRole)) {
       setNav(defaultNavForRole(shellRole))
     }
   }, [shellRole, nav])
+
+  useEffect(() => {
+    if (scheduleOn === false && nav === 'schedule') setNav('delivery')
+  }, [scheduleOn, nav])
 
   useEffect(() => {
     if (!embedPanel) {
@@ -154,6 +173,7 @@ export function HomeScreen({
         companyLogoUrl={session.companyLogoUrl}
         online={online}
         lang={lang}
+        scheduleEnabled={scheduleOn === true}
         onLangChange={changeLang}
         onNavigate={setNav}
         onLogout={onLogout}
@@ -192,7 +212,7 @@ export function HomeScreen({
           }`}
         >
           {nav === 'print' && (
-            <PrintScreen companyName={companyLabel} online={online} />
+            <PrintScreen companyName={companyLabel} online={online} lang={lang} />
           )}
           {embedPanel ? (
             <PanelHost mode={nav as PanelMode} online={online === 'online'} lang={lang} />

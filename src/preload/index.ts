@@ -75,6 +75,16 @@ const api = {
   reloadPanel: () => ipcRenderer.invoke(IPC.PANEL_RELOAD) as Promise<{ ok: boolean }>,
   openPanelExternal: (mode: PanelMode) =>
     ipcRenderer.invoke(IPC.PANEL_OPEN_EXTERNAL, mode) as Promise<{ ok: boolean }>,
+  setPanelLanguage: (lang: string) =>
+    ipcRenderer.invoke(IPC.PANEL_SET_LANGUAGE, lang) as Promise<{ ok: boolean }>,
+  getPanelLicense: () =>
+    ipcRenderer.invoke(IPC.PANEL_GET_LICENSE) as Promise<Record<string, unknown>>,
+  onPanelLicense: (cb: (modules: Record<string, unknown>) => void): (() => void) => {
+    const listener = (_: Electron.IpcRendererEvent, modules: Record<string, unknown>) =>
+      cb(modules || {})
+    ipcRenderer.on(IPC.PANEL_LICENSE, listener)
+    return () => ipcRenderer.removeListener(IPC.PANEL_LICENSE, listener)
+  },
   onPanelNavChanged: (cb: (mode: PanelMode) => void): (() => void) => {
     const listener = (_: Electron.IpcRendererEvent, mode: PanelMode) => cb(mode)
     ipcRenderer.on(IPC.PANEL_NAV_CHANGED, listener)

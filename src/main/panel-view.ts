@@ -34,6 +34,34 @@ let contentLoaded = false
 /** Seed SSO em andamento — showPanel só anexa a view, não dispara outro loadURL. */
 let seeding = false
 let embedHooked = false
+let panelLang: 'pt' | 'en' | 'es' = 'pt'
+let panelLicense: Record<string, unknown> = {}
+
+export function getPanelLicense(): Record<string, unknown> {
+  return panelLicense
+}
+
+function notePanelLicense(modules?: Record<string, unknown> | null): void {
+  panelLicense = modules && typeof modules === 'object' ? modules : {}
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) {
+    win.webContents.send(IPC.PANEL_LICENSE, panelLicense)
+  }
+}
+
+function languageScript(lang: 'pt' | 'en' | 'es'): string {
+  const safe = JSON.stringify(lang)
+  return `(() => { try { localStorage.setItem('delivai_language', ${safe}); window.dispatchEvent(new CustomEvent('delidesk-set-language', { detail: ${safe} })); } catch (e) {} })()`
+}
+
+export function setPanelLanguage(lang: string): { ok: boolean } {
+  panelLang = lang === 'en' || lang === 'es' ? lang : 'pt'
+  const v = view
+  if (v && !v.webContents.isDestroyed()) {
+    void v.webContents.executeJavaScript(languageScript(panelLang)).catch(() => undefined)
+  }
+  return { ok: true }
+}
 let reauthInFlight = false
 /** Recuperando /login no BrowserView — não desloga o agente. */
 let recovering = false
@@ -147,6 +175,7 @@ function ensureView(): BrowserView {
     embedHooked = true
     view.webContents.on('did-finish-load', () => {
       void view?.webContents.executeJavaScript(EMBED_BOOTSTRAP).catch(() => undefined)
+      void view?.webContents.executeJavaScript(languageScript(panelLang)).catch(() => undefined)
       // Após o painel hidratar customer, nome/logo vão para localStorage.
       void syncBrandingFromPanel().catch(() => undefined)
       const win = getMainWindow()
@@ -589,9 +618,12 @@ function panelDestPath(snap: PanelSnapshot): string {
 }
 
 async function injectPanelSnapshot(v: BrowserView, snap: PanelSnapshot): Promise<void> {
+  notePanelLicense(snap.licenseModules)
+  const agentId = getSession()?.agentId || ''
   const payload = JSON.stringify({
     user: snap.user,
     license_modules: snap.licenseModules ?? {},
+    agent_id: agentId,
     company_name: snap.companyName ?? '',
     company_logo_url: snap.companyLogoUrl ?? '',
     embed_key: 'delivai_delidesk_embed'
@@ -604,6 +636,7 @@ async function injectPanelSnapshot(v: BrowserView, snap: PanelSnapshot): Promise
         const cnpj = String(d.user.cnpj || '').replace(/\\D/g, '');
         if (cnpj) localStorage.setItem('cnpj', cnpj);
         localStorage.setItem('license_modules', JSON.stringify(d.license_modules || {}));
+        if (d.agent_id) localStorage.setItem('delivai_delidesk_agent_id', String(d.agent_id));
         localStorage.setItem(d.embed_key, '1');
         try {
           sessionStorage.setItem('delivai_auth_grace_until', String(Date.now() + 120000));
@@ -679,7 +712,7 @@ function snapshotFromAgentSession(): PanelSnapshot | null {
       mod_atendimento: true,
       mod_motoboy: true,
       mod_gerente: true,
-      mod_agendamento: true,
+      mod_agendamento: false,
       mod_financeiro: true
     },
     companyName: name,

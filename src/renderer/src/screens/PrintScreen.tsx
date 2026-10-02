@@ -1,23 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PrintJob, PrintStateSnapshot, PrintResult } from '@shared/print'
+import { railText, type RailLang } from '../i18n/rail'
 
 type Props = {
   companyName?: string
   online: 'online' | 'offline'
+  lang?: RailLang
 }
 
-function statusLabel(status: string): string {
+function statusLabel(status: string, lang: RailLang): string {
   switch (status) {
     case 'queued':
-      return 'Na fila'
+      return railText(lang, 'print_queued')
     case 'printing':
-      return 'Imprimindo'
+      return railText(lang, 'print_printing')
     case 'done':
-      return 'Impresso'
+      return railText(lang, 'print_printed')
     case 'failed':
-      return 'Falhou'
+      return railText(lang, 'print_failed')
     case 'cancelled':
-      return 'Cancelado'
+      return railText(lang, 'print_cancelled')
     default:
       return status
   }
@@ -44,7 +46,57 @@ function canReprint(job: PrintJob): boolean {
   return job.status === 'done' || job.status === 'failed' || job.status === 'cancelled'
 }
 
-export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
+function JobList({
+  title,
+  empty,
+  jobs,
+  selectedId,
+  lang,
+  onPick
+}: {
+  title: string
+  empty: string
+  jobs: PrintJob[]
+  selectedId?: string
+  lang: RailLang
+  onPick: (id: string) => void
+}): React.JSX.Element {
+  return (
+    <section className="glass-card rounded-xl p-3 min-w-0">
+      <h2 className="text-xs font-semibold text-delivai-text-gray/70 mb-2">{title}</h2>
+      <div className="divide-y divide-white/10 max-h-80 overflow-auto">
+        {jobs.length === 0 ? (
+          <p className="text-sm text-delivai-text-gray/60 py-2">{empty}</p>
+        ) : (
+          jobs.slice(0, 40).map((j) => {
+            const active = selectedId === j.id
+            return (
+              <button
+                key={j.id}
+                type="button"
+                onClick={() => onPick(j.id)}
+                className={`w-full flex justify-between items-start gap-2 py-2 text-sm text-left ${
+                  active ? 'bg-delivai-neon-green/10 px-1.5 rounded-lg' : 'hover:bg-white/5 px-1.5 rounded-lg'
+                }`}
+              >
+                <span className="min-w-0">
+                  <span className="font-medium block truncate">{j.orderLabel}</span>
+                  <span className="text-xs text-delivai-text-gray/65">
+                    {statusLabel(j.status, lang)}
+                    {j.error ? ` · ${j.error}` : ''}
+                  </span>
+                </span>
+                <span className="text-xs text-delivai-text-gray/55 shrink-0">{timeAgo(j.updatedAt)}</span>
+              </button>
+            )
+          })
+        )}
+      </div>
+    </section>
+  )
+}
+
+export function PrintScreen({ companyName, online, lang = 'pt' }: Props): React.JSX.Element {
   const [state, setState] = useState<PrintStateSnapshot | null>(null)
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -297,45 +349,27 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className="glass-card rounded-xl p-4">
-          <h2 className="text-xs font-semibold text-delivai-text-gray/70 mb-3">
-            Fila neste PC
-            {state.backendPollRunning
-              ? ' (poll ativo)'
-              : state.mockSseRunning
-                ? ' (SSE mock ativo)'
-                : ''}
-          </h2>
-          <div className="space-y-0 divide-y divide-white/10 max-h-80 overflow-auto">
-            {state.jobs.length === 0 && (
-              <p className="text-sm text-delivai-text-gray/60 py-2">Fila vazia.</p>
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+          <JobList
+            title={railText(lang, 'print_pending')}
+            empty={railText(lang, 'print_empty_pending')}
+            jobs={state.jobs.filter((j) => j.status === 'queued' || j.status === 'printing')}
+            selectedId={selected?.id}
+            lang={lang}
+            onPick={setSelectedId}
+          />
+          <JobList
+            title={railText(lang, 'print_done')}
+            empty={railText(lang, 'print_empty_done')}
+            jobs={state.jobs.filter(
+              (j) => j.status === 'done' || j.status === 'failed' || j.status === 'cancelled'
             )}
-            {state.jobs.slice(0, 30).map((j) => {
-              const active = selected?.id === j.id
-              return (
-                <button
-                  key={j.id}
-                  type="button"
-                  onClick={() => setSelectedId(j.id)}
-                  className={`w-full flex justify-between items-start gap-3 py-2.5 text-sm text-left transition
-                    ${active ? 'bg-delivai-neon-green/10 -mx-2 px-2 rounded-lg' : 'hover:bg-white/5 -mx-2 px-2 rounded-lg'}`}
-                >
-                  <span className="min-w-0">
-                    <span className="font-medium block truncate">{j.orderLabel}</span>
-                    <span className="text-xs text-delivai-text-gray/65">
-                      {statusLabel(j.status)}
-                      {j.error ? ` · ${j.error}` : ''}
-                    </span>
-                  </span>
-                  <span className="text-xs text-delivai-text-gray/55 shrink-0">
-                    {timeAgo(j.updatedAt)}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
+            selectedId={selected?.id}
+            lang={lang}
+            onPick={setSelectedId}
+          />
+        </div>
 
         <section className="glass-card rounded-xl p-4">
           <h2 className="text-xs font-semibold text-delivai-text-gray/70 mb-3">
@@ -345,7 +379,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
             <>
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
-                  <p className="text-sm font-semibold">{statusLabel(selected.status)}</p>
+                  <p className="text-sm font-semibold">{statusLabel(selected.status, lang)}</p>
                   <p className="text-xs text-delivai-text-gray/65">
                     {timeAgo(selected.updatedAt)}
                     {selected.error ? ` · ${selected.error}` : ''}
@@ -374,7 +408,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
                   )}
                 </div>
               </div>
-              <pre className="bg-[#fffdf8] text-slate-900 text-[11px] leading-relaxed font-mono rounded-lg p-3 whitespace-pre-wrap shadow-lg max-h-72 overflow-auto">
+              <pre className="mx-auto w-[22rem] max-w-full bg-[#fffdf8] text-slate-900 text-[12px] leading-relaxed font-mono rounded-lg p-4 whitespace-pre-wrap shadow-lg max-h-[70vh] overflow-auto">
                 {selected.previewText || '(sem preview)'}
               </pre>
             </>
