@@ -65,6 +65,9 @@ export const IPC = {
   PANEL_NAV_CHANGED: 'panel:nav-changed',
   /** Painel embutido sem sessão — shell deve voltar ao login Entrar com DelivAI. */
   PANEL_REAUTH_REQUIRED: 'panel:reauth-required',
+  PANEL_SET_LANGUAGE: 'panel:set-language',
+  PANEL_GET_LICENSE: 'panel:get-license',
+  PANEL_LICENSE: 'panel:license',
   APP_GET_VERSION: 'app:get-version',
   UPDATE_CHECK: 'update:check',
   PDVAI_GET_STATE: 'pdvai:get-state',

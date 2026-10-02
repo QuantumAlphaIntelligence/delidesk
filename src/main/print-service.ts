@@ -241,7 +241,7 @@ async function handleVirtualPrintJob(bytes: Buffer): Promise<void> {
   try {
     preview =
       bytes.length > 0
-        ? previewFromEscPos(bytes).slice(0, 400) || `Job virtual (${bytes.length} bytes)`
+        ? previewFromEscPos(bytes) || `Job virtual (${bytes.length} bytes)`
         : 'Job virtual vazio'
   } catch (err) {
     console.warn('[virtual-printer] preview decode failed', err)

@@ -67,6 +67,7 @@ type Props = {
   companyLogoUrl?: string
   online: 'online' | 'offline'
   lang: RailLang
+  scheduleEnabled?: boolean
   onLangChange: (lang: RailLang) => void
   onNavigate: (id: AppNavId) => void
   onLogout: () => void
@@ -396,6 +397,7 @@ export function AppRail({
   companyLogoUrl,
   online,
   lang,
+  scheduleEnabled = false,
   onLangChange,
   onNavigate,
   onLogout
@@ -559,7 +561,7 @@ export function AppRail({
               </div>
             ) : null}
 
-            {LOJA.map((item) => (
+            {LOJA.filter((item) => item.id !== 'schedule' || scheduleEnabled).map((item) => (
               <NavButton
                 key={item.id}
                 item={item}
