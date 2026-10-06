@@ -398,6 +398,7 @@ async function printBytes(
     return { ok: false, error: job.error, jobId: job.id }
   }
 
+  job.printerName = printerName
   job.status = 'printing'
   job.updatedAt = Date.now()
   emit()

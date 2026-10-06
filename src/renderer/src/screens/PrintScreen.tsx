@@ -30,6 +30,15 @@ function timeAgo(ts: number): string {
   return `${Math.floor(s / 60)} min`
 }
 
+function clock(ts: number): string {
+  return new Date(ts).toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 function queueStatusLabel(state: PrintStateSnapshot): string {
   if (state.backendPollRunning) return 'polling'
   if (state.mockSseRunning) return 'mock'
@@ -49,6 +58,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [printersOpen, setPrintersOpen] = useState(false)
 
   useEffect(() => {
     let unsub = (): void => undefined
@@ -197,19 +207,29 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
       )}
 
       <section className="space-y-2">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-delivai-text-gray/90">
-            Impressora física (destino)
+            Impressora: {state.defaultPrinter || '—'}
           </h2>
-          <button
-            type="button"
-            className="text-xs font-semibold text-delivai-neon-green"
-            disabled={busy}
-            onClick={() => void withBusy(() => window.delidesk.refreshPrinters())}
-          >
-            Atualizar
-          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              className="text-xs font-semibold text-delivai-neon-green"
+              onClick={() => setPrintersOpen((open) => !open)}
+            >
+              Trocar impressora
+            </button>
+            <button
+              type="button"
+              className="text-xs font-semibold text-white/60"
+              disabled={busy}
+              onClick={() => void withBusy(() => window.delidesk.refreshPrinters())}
+            >
+              Atualizar
+            </button>
+          </div>
         </div>
+        {printersOpen ? (
         <div className="space-y-2">
           {state.printers.length === 0 && (
             <p className="text-sm text-delivai-text-gray/60">Nenhuma impressora encontrada.</p>
@@ -241,6 +261,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
             )
           })}
         </div>
+        ) : null}
       </section>
 
       <div className="flex flex-wrap gap-2">
@@ -297,7 +318,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-[16rem_minmax(0,1fr)] gap-3">
         <section className="glass-card rounded-xl p-4">
           <h2 className="text-xs font-semibold text-delivai-text-gray/70 mb-3">
             Fila neste PC
@@ -323,8 +344,9 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
                 >
                   <span className="min-w-0">
                     <span className="font-medium block truncate">{j.orderLabel}</span>
-                    <span className="text-xs text-delivai-text-gray/65">
-                      {statusLabel(j.status)}
+                    <span className="text-xs text-delivai-text-gray/65 block">
+                      {statusLabel(j.status)} · {clock(j.updatedAt)}
+                      {j.printerName ? ` · ${j.printerName}` : ''}
                       {j.error ? ` · ${j.error}` : ''}
                     </span>
                   </span>
@@ -344,12 +366,18 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
           {selected ? (
             <>
               <div className="flex items-center justify-between gap-3 mb-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-semibold">{statusLabel(selected.status)}</p>
-                  <p className="text-xs text-delivai-text-gray/65">
-                    {timeAgo(selected.updatedAt)}
-                    {selected.error ? ` · ${selected.error}` : ''}
+                  <p className="text-xs text-delivai-text-gray/80">
+                    Quando: {clock(selected.updatedAt)}
                   </p>
+                  <p className="text-xs text-delivai-text-gray/80 truncate">
+                    Impressora:{' '}
+                    {selected.printerName || 'Ainda não registrada neste cupom'}
+                  </p>
+                  {selected.error ? (
+                    <p className="text-xs text-amber-200/90">{selected.error}</p>
+                  ) : null}
                 </div>
                 <div className="flex gap-2">
                   {canCancel(selected) && (
@@ -374,7 +402,7 @@ export function PrintScreen({ companyName, online }: Props): React.JSX.Element {
                   )}
                 </div>
               </div>
-              <pre className="bg-[#fffdf8] text-slate-900 text-[11px] leading-relaxed font-mono rounded-lg p-3 whitespace-pre-wrap shadow-lg max-h-72 overflow-auto">
+              <pre className="w-full max-w-[40rem] bg-[#fffdf8] text-slate-900 text-[13px] leading-snug font-mono rounded-lg p-3 whitespace-pre-wrap shadow-lg">
                 {selected.previewText || '(sem preview)'}
               </pre>
             </>
