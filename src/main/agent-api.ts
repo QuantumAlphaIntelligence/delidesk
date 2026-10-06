@@ -1,4 +1,5 @@
 import { getBackendBaseUrl } from '../shared/config'
+import type { ServerQueueJob, ServerQueueSnapshot } from '../shared/print'
 import { IPC } from '../shared/ipc'
 import {
   clearSession,
@@ -219,6 +220,54 @@ export async function fetchNextJob(): Promise<NextJobResult> {
       printer_name: typeof j.printer_name === 'string' ? j.printer_name : null
     }
   }
+}
+
+/** Cupons pending/sent ainda no servidor — a mesma fila do botão do Delivery. */
+export async function fetchPendingQueue(): Promise<ServerQueueSnapshot> {
+  const res = await authedFetch('/jobs/pending', { method: 'GET' })
+  const data = await readJson(res)
+  if (!res.ok) {
+    return {
+      ok: false,
+      pending: 0,
+      jobs: [],
+      error: 'Não deu para ler a fila.'
+    }
+  }
+  const raw = Array.isArray(data.jobs) ? data.jobs : []
+  const jobs: ServerQueueJob[] = raw.map((item) => {
+    const row = item as JsonMap
+    return {
+      id: typeof row.id === 'string' ? row.id : '',
+      title: typeof row.title === 'string' && row.title.trim() ? row.title : 'Cupom',
+      status: typeof row.status === 'string' ? row.status : 'pending',
+      createdAt: typeof row.created_at === 'string' ? row.created_at : '',
+      printerName: typeof row.printer_name === 'string' ? row.printer_name : null
+    }
+  }).filter((job) => job.id)
+  const pending =
+    typeof data.pending_jobs === 'number' && Number.isFinite(data.pending_jobs)
+      ? Math.max(0, Math.floor(data.pending_jobs))
+      : jobs.length
+  return { ok: true, pending, jobs }
+}
+
+/** Cancela pending/sent no servidor. O painel usa o mesmo efeito em Limpar fila. */
+export async function clearPendingQueue(): Promise<{ ok: boolean; cancelled: number; error?: string }> {
+  const res = await authedFetch('/jobs/clear-pending', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}'
+  })
+  const data = await readJson(res)
+  if (!res.ok) {
+    return { ok: false, cancelled: 0, error: 'Não foi possível zerar a fila.' }
+  }
+  const cancelled =
+    typeof data.cancelled === 'number' && Number.isFinite(data.cancelled)
+      ? Math.max(0, Math.floor(data.cancelled))
+      : 0
+  return { ok: true, cancelled }
 }
 
 export async function postJobResult(

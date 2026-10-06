@@ -518,6 +518,29 @@ export async function cancelJob(jobId: string): Promise<PrintStateSnapshot> {
   return getSnapshot()
 }
 
+/** Cupons do DelivAI que este PC já pegou e ainda não terminou. */
+export function dropLocalOpenBackendJobs(): void {
+  let changed = false
+  for (const job of jobs) {
+    if (job.source !== 'backend') continue
+    if (job.status === 'queued') {
+      job.status = 'cancelled'
+      job.error = 'Fila zerada'
+      job.updatedAt = Date.now()
+      changed = true
+    } else if (job.status === 'printing') {
+      cancelRequested.add(job.id)
+      job.error = 'Fila zerada'
+      job.updatedAt = Date.now()
+      changed = true
+    }
+  }
+  if (changed) {
+    persist()
+    emit()
+  }
+}
+
 /** Reimprime um job já feito/falho a partir do ESC/POS guardado (ou regenera cupom de teste). */
 export async function reprintJob(jobId: string): Promise<PrintResult> {
   const original = jobs.find((j) => j.id === jobId)

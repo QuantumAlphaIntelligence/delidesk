@@ -69,6 +69,22 @@ export type PrintStateSnapshot = {
   }
 }
 
+/** Cupom ainda na fila do servidor (pending/sent), sem o conteúdo. */
+export type ServerQueueJob = {
+  id: string
+  title: string
+  status: string
+  createdAt: string
+  printerName: string | null
+}
+
+export type ServerQueueSnapshot = {
+  ok: boolean
+  pending: number
+  jobs: ServerQueueJob[]
+  error?: string
+}
+
 export type PrintResult = {
   ok: boolean
   jobId?: string
