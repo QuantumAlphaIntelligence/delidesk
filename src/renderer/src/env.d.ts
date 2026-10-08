@@ -1,5 +1,5 @@
 import type { AuthSession, AppOnlineStatus, UpdateUiStatus } from '../../shared/ipc'
-import type { PrintStateSnapshot, PrintResult } from '../../shared/print'
+import type { PrintStateSnapshot, PrintResult, ServerQueueSnapshot } from '../../shared/print'
 import type { PanelBounds, PanelMode, PdvaiState } from '../../shared/pdvai'
 
 export type DelideskApi = {
@@ -25,6 +25,8 @@ export type DelideskApi = {
   startBackendPoll: () => Promise<PrintStateSnapshot>
   stopBackendPoll: () => Promise<PrintStateSnapshot>
   installVirtualPrinter: () => Promise<PrintStateSnapshot>
+  getServerQueue: () => Promise<ServerQueueSnapshot>
+  clearServerQueue: () => Promise<{ ok: boolean; cancelled: number; error?: string }>
   onPrintStateChanged: (cb: (state: PrintStateSnapshot) => void) => () => void
   showPanel: (mode: PanelMode, bounds: PanelBounds) => Promise<{ ok: boolean }>
   hidePanel: () => Promise<{ ok: boolean }>

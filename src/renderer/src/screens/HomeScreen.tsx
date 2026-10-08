@@ -207,12 +207,12 @@ export function HomeScreen({
         </header>
 
         <main
-          className={`flex-1 min-h-0 ${
-            embedPanel ? 'p-2 overflow-hidden' : 'p-5 overflow-auto'
+          className={`flex min-h-0 flex-1 flex-col ${
+            embedPanel || nav === 'print' ? 'overflow-hidden p-2' : 'overflow-auto p-5'
           }`}
         >
           {nav === 'print' && (
-            <PrintScreen companyName={companyLabel} online={online} lang={lang} />
+            <PrintScreen companyName={companyLabel} online={online} />
           )}
           {embedPanel ? (
             <PanelHost mode={nav as PanelMode} online={online === 'online'} lang={lang} />

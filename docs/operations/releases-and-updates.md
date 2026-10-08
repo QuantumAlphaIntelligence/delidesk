@@ -58,7 +58,18 @@ Identidade = **versão + canal + API**.
 
 Canal na Actions: commit em `main` → prod; só em `develop` → sandbox. Em `workflow_dispatch`, o input `channel` manda.
 
-Sem Actions de release bem-sucedida, o cliente **continua** na versão antiga do feed — mesmo com `main` atualizado no Git.
+Sem Actions de release bem-sucedida, o cliente **continua** na versão antiga do feed — mesmo com `main` atualizado no Git. O card diz “você já está na versão mais recente” porque **não existe instalador mais novo**.
+
+### Obrigação do agente — subir melhoria para a `main` do DeliDesk
+
+Quando o Leo mandar a melhoria para a **`main`**, no mesmo pedido, sem ele repetir:
+
+1. Subir o número em `package.json` (não reusar a versão que já está no ar).
+2. Merge na `main`.
+3. Disparar a **Release Windows** do canal **prod**.
+4. A loja vê a bolinha **1** no ícone da versão e o card de atualização. O download é em segundo plano. Instala ao fechar o app, ou na hora em **Atualizar agora**.
+
+Sem o passo 3 o ícone não avisa, porque não há versão nova no feed.
 
 ---
 
@@ -110,8 +121,9 @@ Implementação: `src/main/auto-update.ts` + toast `UpdateToast`.
 [ ] BE prod já tem a API necessária (retrocompat se houver parque antigo)
 [ ] Front main (se a UX/download mudou) já deployado ou alinhado
 [ ] PR delidesk → main mergeada (CI verde)
-[ ] package.json version bumpada (sem reusar tag)
+[ ] package.json version bumpada (sem reusar tag) — no mesmo pedido de ir para a main
 [ ] Actions Release Windows: channel=prod, ref=main (ou tag vX.Y.Z em commit de main)
+[ ] PC na versão anterior mostra a bolinha 1 no ícone da versão
 [ ] GitHub Release: NÃO prerelease; assets: Setup-prod exe + blockmap + latest.yml
 [ ] Painel/download channel=prod aponta para essa versão
 [ ] 1 PC smoke; demais PCs: toast “Depois” ok até fecharem o app

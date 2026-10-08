@@ -398,6 +398,7 @@ async function printBytes(
     return { ok: false, error: job.error, jobId: job.id }
   }
 
+  job.printerName = printerName
   job.status = 'printing'
   job.updatedAt = Date.now()
   emit()
@@ -515,6 +516,28 @@ export async function cancelJob(jobId: string): Promise<PrintStateSnapshot> {
   }
 
   return getSnapshot()
+}
+
+export function dropLocalOpenBackendJobs(): void {
+  let changed = false
+  for (const job of jobs) {
+    if (job.source !== 'backend') continue
+    if (job.status === 'queued') {
+      job.status = 'cancelled'
+      job.error = 'Fila zerada'
+      job.updatedAt = Date.now()
+      changed = true
+    } else if (job.status === 'printing') {
+      cancelRequested.add(job.id)
+      job.error = 'Fila zerada'
+      job.updatedAt = Date.now()
+      changed = true
+    }
+  }
+  if (changed) {
+    persist()
+    emit()
+  }
 }
 
 /** Reimprime um job já feito/falho a partir do ESC/POS guardado (ou regenera cupom de teste). */

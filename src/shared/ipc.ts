@@ -53,6 +53,8 @@ export const IPC = {
   PRINT_START_BACKEND_POLL: 'print:start-backend-poll',
   PRINT_STOP_BACKEND_POLL: 'print:stop-backend-poll',
   PRINT_INSTALL_VIRTUAL: 'print:install-virtual',
+  PRINT_SERVER_QUEUE: 'print:server-queue',
+  PRINT_CLEAR_SERVER_QUEUE: 'print:clear-server-queue',
   PRINT_STATE_CHANGED: 'print:state-changed',
   PANEL_SHOW: 'panel:show',
   PANEL_HIDE: 'panel:hide',
