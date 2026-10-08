@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, type AuthSession, type UpdateUiStatus } from '../shared/ipc'
-import type { PrintStateSnapshot, PrintResult } from '../shared/print'
+import type { PrintStateSnapshot, PrintResult, ServerQueueSnapshot } from '../shared/print'
 import type { PanelBounds, PanelMode, PdvaiState } from '../shared/pdvai'
 
 const api = {
@@ -58,6 +58,14 @@ const api = {
     ipcRenderer.invoke(IPC.PRINT_STOP_BACKEND_POLL) as Promise<PrintStateSnapshot>,
   installVirtualPrinter: () =>
     ipcRenderer.invoke(IPC.PRINT_INSTALL_VIRTUAL) as Promise<PrintStateSnapshot>,
+  getServerQueue: () =>
+    ipcRenderer.invoke(IPC.PRINT_SERVER_QUEUE) as Promise<ServerQueueSnapshot>,
+  clearServerQueue: () =>
+    ipcRenderer.invoke(IPC.PRINT_CLEAR_SERVER_QUEUE) as Promise<{
+      ok: boolean
+      cancelled: number
+      error?: string
+    }>,
   onPrintStateChanged: (cb: (state: PrintStateSnapshot) => void): (() => void) => {
     const listener = (_: Electron.IpcRendererEvent, state: PrintStateSnapshot) =>
       cb(state)

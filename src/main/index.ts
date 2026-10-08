@@ -49,6 +49,7 @@ import {
 import {
   ackJob,
   cancelJob,
+  dropLocalOpenBackendJobs,
   getSnapshot,
   initPrintService,
   installVirtualPrinter,
@@ -64,6 +65,7 @@ import {
   stopBackendPoll,
   stopMockSse
 } from './print-service'
+import { clearPendingQueue, fetchPendingQueue } from './agent-api'
 import {
   destroyPanel,
   hidePanel,
@@ -338,6 +340,12 @@ function registerIpc(): void {
   ipcMain.handle(IPC.PRINT_START_BACKEND_POLL, () => startBackendPoll())
   ipcMain.handle(IPC.PRINT_STOP_BACKEND_POLL, () => stopBackendPoll())
   ipcMain.handle(IPC.PRINT_INSTALL_VIRTUAL, () => installVirtualPrinter())
+  ipcMain.handle(IPC.PRINT_SERVER_QUEUE, () => fetchPendingQueue())
+  ipcMain.handle(IPC.PRINT_CLEAR_SERVER_QUEUE, async () => {
+    const result = await clearPendingQueue()
+    if (result.ok) dropLocalOpenBackendJobs()
+    return result
+  })
 
   ipcMain.handle(
     IPC.PANEL_SHOW,

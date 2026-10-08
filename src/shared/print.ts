@@ -16,6 +16,8 @@ export type PrintJob = {
   error?: string
   /** Preview text for UI (not the raw bytes). */
   previewText: string
+  /** Impressora física para a qual o cupom foi enviado. */
+  printerName?: string
   source: 'test' | 'mock-sse' | 'callback' | 'backend' | 'virtual'
   /** Base64 ESC/POS — só no main/persist; strip no snapshot se preferir. Mantido para reimpressão. */
   contentBase64?: string
@@ -65,6 +67,22 @@ export type PrintStateSnapshot = {
       | 'error'
     lastCaptureMessage?: string
   }
+}
+
+/** Cupom ainda na fila do servidor (pending/sent), sem o conteúdo. */
+export type ServerQueueJob = {
+  id: string
+  title: string
+  status: string
+  createdAt: string
+  printerName: string | null
+}
+
+export type ServerQueueSnapshot = {
+  ok: boolean
+  pending: number
+  jobs: ServerQueueJob[]
+  error?: string
 }
 
 export type PrintResult = {

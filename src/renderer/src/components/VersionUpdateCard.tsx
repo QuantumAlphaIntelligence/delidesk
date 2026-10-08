@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { UpdateUiStatus } from '@shared/ipc'
+import { railText, readRailLang } from '../i18n/rail'
 
 type AppVersionInfo = { version: string; channel: string; packaged?: boolean }
 
@@ -200,6 +201,9 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
   }, [open])
 
   const ui = toneFromStatus(status, packaged)
+  const updateWaiting = packaged && (status.state === 'available' || status.state === 'downloaded')
+  const updateUrgent =
+    (status.state === 'available' || status.state === 'downloaded') && status.urgency === 'mandatory'
 
   const runCheck = (): void => {
     if (!packaged) {
@@ -316,12 +320,22 @@ export function VersionUpdateCard({ expanded, appInfo }: Props): React.JSX.Eleme
                   : 'text-delivai-text-gray/70 hover:bg-white/10 hover:text-white'
           }`}
       >
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10">
+        <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/5 ring-1 ring-white/10">
           <svg viewBox="0 0 24 24" className="h-[1.15rem] w-[1.15rem]" fill="none" stroke="currentColor" strokeWidth="1.8">
             <circle cx="12" cy="12" r="9" />
             <path d="M12 8v5" strokeLinecap="round" />
             <circle cx="12" cy="16" r="0.9" fill="currentColor" stroke="none" />
           </svg>
+          {updateWaiting ? (
+            <span
+              className={`absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold leading-none ring-2 ring-[#071018] ${
+                updateUrgent ? 'bg-red-500 text-white' : 'bg-amber-400 text-amber-950'
+              }`}
+              aria-label={railText(readRailLang(), 'version_badge')}
+            >
+              1
+            </span>
+          ) : null}
         </span>
         {expanded ? (
           <span className="min-w-0 truncate text-left text-sm font-semibold">
