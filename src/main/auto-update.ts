@@ -2,6 +2,7 @@ import { app, BrowserWindow } from 'electron'
 import { autoUpdater, type UpdateInfo } from 'electron-updater'
 import { IPC, type UpdateUiStatus, type UpdateUrgency } from '../shared/ipc'
 import { getBackendBaseUrl } from '../shared/config'
+import { resolveDelideskChannel } from '../shared/channel'
 
 export type { UpdateUiStatus }
 
@@ -22,10 +23,7 @@ function resolveFeedUrl(): string | null {
   const fromEnv = (process.env.DELIDESK_UPDATE_FEED_URL || '').trim().replace(/\/$/, '')
   if (fromEnv) return fromEnv
   const api = getBackendBaseUrl()
-  const channel =
-    (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox').toLowerCase() === 'prod'
-      ? 'prod'
-      : 'sandbox'
+  const channel = resolveDelideskChannel()
   if (!api) return null
   return `${api}/webhook/public/delidesk-update/${channel}`
 }

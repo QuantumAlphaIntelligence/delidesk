@@ -1,13 +1,11 @@
 import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import { existsSync } from 'fs'
 import { join } from 'path'
+import { resolveDelideskChannel } from '../shared/channel'
 
 /** Sandbox: título distinto; prod: só DeliDesk. */
 export function resolveWindowTitle(): string {
-  const raw = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
-    .trim()
-    .toLowerCase()
-  return raw === 'prod' ? 'DeliDesk' : 'DeliDesk Test'
+  return resolveDelideskChannel() === 'prod' ? 'DeliDesk' : 'DeliDesk Test'
 }
 
 /** Mantém o título do canal; o painel embutido (document.title) não pode virar “DeliDesk” em sandbox. */

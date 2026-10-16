@@ -56,4 +56,10 @@ const outDir = join(root, 'resources')
 mkdirSync(outDir, { recursive: true })
 const outPath = join(outDir, 'channel.json')
 writeFileSync(outPath, `${JSON.stringify(baked, null, 2)}\n`, 'utf8')
+const written = JSON.parse(readFileSync(outPath, 'utf8'))
+const writtenChannel = String(written.channel || '').trim().toLowerCase()
+if (writtenChannel !== channel) {
+  console.error(`bake: channel.json ficou "${writtenChannel}", esperado ${channel}.`)
+  process.exit(1)
+}
 console.log(`Wrote ${outPath} (channel=${channel})`)
