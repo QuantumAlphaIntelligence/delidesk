@@ -12,7 +12,10 @@
 | **sandbox** | `develop` | `DeliDesk-*.exe` (ex.: `DeliDesk-0.2.11.exe`) | **prerelease** | API **test** (`:staging`) | Leo / homologação |
 | **prod** | `main` | `DeliDesk-*.exe` | release **estável** (não prerelease) | API **produção** | Cliente da loja |
 
-- O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL`).
+- O canal fica **assado no instalador** (`resources/channel.json` → `DELIDESK_CHANNEL`). Quem decide o canal no app é `src/shared/channel.ts`.
+- Sem canal explícito, o instalador é **prod** (feed, pasta de dados e API). Isso inclui versão antiga que não trazia `channel.json`. Sandbox só se o `channel.json` ou o ambiente disser sandbox, ou no `npm run dev`.
+- `npm run bake:prod` grava `channel.json` como prod. O instalador de produção para se esse arquivo não for prod.
+- Falha de conexão no login: em prod a frase é só “Não foi possível conectar ao servidor”, sem citar teste nem endereço de API. No sandbox o texto técnico continua.
 - Feed de update: `{BACKEND}/webhook/public/delidesk-update/{sandbox|prod}`.
 - Instalador **sandbox não vira prod** sozinho (e vice-versa). Cliente em prod **só** recebe releases estáveis.
 - Impressora virtual Windows (captura iFood): **prod** = fila `DeliDesk` porta `19100`; **sandbox** = fila `DeliDesk Test` porta `19101` — no mesmo PC as duas podem coexistir sem conflito.
@@ -200,7 +203,7 @@ npm run dev
 
 | Sintoma | Causa típica | Ação |
 |---------|--------------|------|
-| Cliente “não atualiza” | Release não publicada / tag errada / ainda prerelease no canal prod | Rodar Actions prod; conferir `latest.yml` |
+| Cliente em prod vê “servidor de teste” | Mensagem antiga, ou o app caiu em sandbox (sem `channel.json`) | Instalador com `channel.json` prod; a frase de prod não cita teste |
 | Baixou sandbox sem querer | Link `channel=sandbox` ou instalador de teste | Reinstalar **prod**; não misturar atalhos |
 | App novo + API velha | Desk main antes do BE main | Reverter ordem: BE primeiro |
 | Reiniciou no pico | Operador clicou “Instalar agora” | Orientar usar “Depois” até fim do turno |
@@ -215,7 +218,7 @@ npm run dev
 | Peça | Path |
 |------|------|
 | Updater | `src/main/auto-update.ts` |
-| Canal bake | `src/main/load-env.ts` + `resources/channel.json` |
+| Canal | `src/shared/channel.ts` + `src/main/load-env.ts` + `resources/channel.json` |
 | Toast | `src/renderer/src/components/UpdateToast.tsx` |
 | Workflow | `.github/workflows/release-windows.yml` |
 | Feed / download BE | `DelideskReleaseHandler` / `DelideskReleaseService` (backend) |

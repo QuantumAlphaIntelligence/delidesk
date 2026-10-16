@@ -8,6 +8,7 @@ import {
   net
 } from 'electron'
 import { join, resolve } from 'path'
+import { resolveDelideskChannel } from '../shared/channel'
 
 /**
  * Isola perfil Electron por canal **antes** do single-instance lock.
@@ -15,9 +16,7 @@ import { join, resolve } from 'path'
  * Sandbox/dev usa `%APPDATA%/delidesk-sandbox` — senão `npm run dev` impede abrir o .exe prod.
  */
 function applyChannelUserDataIsolation(): void {
-  const channel = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
-    .trim()
-    .toLowerCase()
+  const channel = resolveDelideskChannel(app.isPackaged)
   if (channel === 'prod') return
   const isolated = join(app.getPath('appData'), 'delidesk-sandbox')
   app.setPath('userData', isolated)
@@ -268,10 +267,12 @@ function registerIpc(): void {
       } catch (err) {
         pendingAuth = null
         const raw = err instanceof Error ? err.message : String(err)
-        const base = getBackendBaseUrl()
+        const prod = resolveDelideskChannel(app.isPackaged) === 'prod'
         const msg =
           /fetch failed|ECONNREFUSED|ENOTFOUND|network/i.test(raw)
-            ? `Não foi possível falar com a API (${base}). Confira DELIDESK_API_URL e se o backend de teste está no ar.`
+            ? prod
+              ? 'Não foi possível conectar ao servidor. Verifique sua internet ou tente de novo em instantes.'
+              : `Não foi possível falar com a API (${getBackendBaseUrl()}). Confira DELIDESK_API_URL e se o backend de teste está no ar.`
             : raw
         return { ok: false, mock: false, error: msg }
       }
@@ -397,11 +398,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.APP_GET_VERSION, () => ({
     version: resolveDelideskVersion(),
     packaged: app.isPackaged,
-    channel:
-      (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox').toLowerCase() ===
-      'prod'
-        ? 'prod'
-        : 'sandbox'
+    channel: resolveDelideskChannel(app.isPackaged)
   }))
 }
 
@@ -547,9 +544,7 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     if (process.platform === 'win32') {
-      const channel = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
-        .trim()
-        .toLowerCase()
+      const channel = resolveDelideskChannel(app.isPackaged)
       app.setAppUserModelId(
         channel === 'prod' ? 'br.com.delivai.delidesk' : 'br.com.delivai.delidesk.sandbox'
       )

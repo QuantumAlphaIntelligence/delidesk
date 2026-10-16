@@ -4,18 +4,13 @@ import { existsSync } from 'fs'
 import { join } from 'path'
 import { promisify } from 'util'
 import { app } from 'electron'
+import { resolveDelideskChannel, type DelideskChannel } from '../shared/channel'
 
 const execFileAsync = promisify(execFile)
 
-/** prod = loja; sandbox = homologação (develop / bake sandbox). Default sandbox (igual auto-update). */
-export type DelideskChannel = 'prod' | 'sandbox'
-
-export function resolveDelideskChannel(): DelideskChannel {
-  const raw = (process.env.DELIDESK_CHANNEL || process.env.CHANNEL || 'sandbox')
-    .trim()
-    .toLowerCase()
-  return raw === 'prod' ? 'prod' : 'sandbox'
-}
+/** prod = loja; sandbox = homologação (develop / bake sandbox). */
+export type { DelideskChannel } from '../shared/channel'
+export { resolveDelideskChannel } from '../shared/channel'
 
 /**
  * Nome/porta da impressora virtual por canal — permite prod e sandbox no mesmo PC
